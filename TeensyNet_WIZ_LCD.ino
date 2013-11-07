@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.1
-Last Modified 11/03/2013
+Version 0.0.2
+Last Modified 11/07/2013
 By Jim Mayhugh
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -53,7 +53,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   General Setup
 */
 
-const char* versionStr = "TeensyNet WIZ-LCD Version 0.0.1, 11/03/2013";
+const char* versionStr = "TeensyNet WIZ-LCD Version 0.0.2, 11/07/2013";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -111,6 +111,7 @@ const uint8_t useDebug           = setPidArray + 1;       // "P"
 const uint8_t restoreStructures  = useDebug + 1;          // "Q"
 const uint8_t shortShowChip      = restoreStructures + 1; // "R"
 const uint8_t updateChipName     = shortShowChip + 1;     // "S"
+const uint8_t showActionStatus   = updateChipName + 1;    // "T"
 
 const uint8_t clearAndReset      = 'x';
 const uint8_t clearEEPROM        = 'y';
@@ -1009,7 +1010,7 @@ void udpProcess()
     case showChip: // "2"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxChips)
+      if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1029,7 +1030,7 @@ void udpProcess()
     case getChipAddress: // "4"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxChips)
+      if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1042,7 +1043,7 @@ void udpProcess()
     case getChipStatus: // "5"
     {
       x = atoi((char *) &PacketBuffer[1]);
-     if(x > maxChips)
+     if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1082,7 +1083,7 @@ void udpProcess()
     case setSwitchState: // "6"
     {
      chipSelected = atoi((char *) &PacketBuffer[1]);
-     if(chipSelected > maxChips)
+     if(chipSelected >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1142,7 +1143,7 @@ void udpProcess()
     case getChipType: // "8"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxChips)
+      if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1195,7 +1196,7 @@ void udpProcess()
         Serial.println(F("getActionArray"));
       }
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxActions)
+      if(x >= maxActions)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1535,7 +1536,7 @@ void udpProcess()
     case setActionSwitch: // "E"
     {
       actionSelected = atoi((char *) &PacketBuffer[1]);
-     if(actionSelected > maxActions)
+     if(actionSelected >= maxActions)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1949,7 +1950,7 @@ void udpProcess()
     case getPidArray: // "N"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxPIDs)
+      if(x >= maxPIDs)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
       }else{
@@ -2052,7 +2053,7 @@ void udpProcess()
     case shortShowChip: // "R"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if( x > maxChips)
+      if( x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
       }else{
@@ -2088,6 +2089,19 @@ void udpProcess()
       }
       
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Name Updated");
+      sendUDPpacket();
+      break;
+    }
+    
+    case showActionStatus:  // "T"
+    {
+      x = atoi((char *) &PacketBuffer[1]);
+      if( x >= maxActions )
+      {
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
+      }else{
+        actionStatus(x);
+      }
       sendUDPpacket();
       break;
     }
@@ -2223,40 +2237,45 @@ void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
 }
 
 
+void actionStatus(int x)
+{
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].actionEnabled);
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  if(action[x].tempPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tempPtr->chipStatus);
+  }
+    
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+    
+  if(action[x].tcPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].tcPtr->chipStatus);
+  }
+
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+
+  if(action[x].thPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].thPtr->chipStatus);
+  }   
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooCold);
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooHot);
+}
+
 void getAllActionStatus(void)
 {
   for( int x = 0; x < maxActions; x++ )
   {
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].actionEnabled);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    if(action[x].tempPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-    }else{
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tempPtr->chipStatus);
-    }
-    
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    
-    if(action[x].tcPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-    }else{
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].tcPtr->chipStatus);
-    }
-    
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    
-    if(action[x].thPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-    }else{
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].thPtr->chipStatus);
-    }   
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooCold);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooHot);
+    actionStatus(x);
     if( x < (maxActions - 1) )
     {
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",";");

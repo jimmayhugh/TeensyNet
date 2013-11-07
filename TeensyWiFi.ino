@@ -2,7 +2,7 @@
 
 TeensyNet.ino
 
-Version 0.0.1
+Version 0.0.2
 Last Modified 11/03/2013
 By Jim Mayhugh
 
@@ -65,7 +65,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define WRITE_RESTART(val) ((*(volatile uint32_t *)RESTART_ADDR) = (val))
 
 
-const char* versionStr = "TeensyWiFi CC3000 UDP Server Version 0.0.1, 11/03/2013";
+const char* versionStr = "TeensyWiFi CC3000 UDP Server Version 0.0.2, 11/07/2013";
 
 const uint16_t resetDebug      = 0x0001; //    1
 const uint16_t pidDebug        = 0x0002; //    2
@@ -113,6 +113,7 @@ const uint8_t useDebug           = setPidArray + 1;       // "P"
 const uint8_t restoreStructures  = useDebug + 1;          // "Q"
 const uint8_t shortShowChip      = restoreStructures + 1; // "R"
 const uint8_t updateChipName     = shortShowChip + 1;     // "S"
+const uint8_t showActionStatus   = updateChipName + 1;    // "T"
 
 const uint8_t clearAndReset      = 'x';
 const uint8_t clearEEPROM        = 'y';
@@ -313,8 +314,8 @@ const unsigned long
 uint32_t t;
 
 // WiFi network (change with your settings !)
-#define WLAN_SSID             "YourSSID"        // cannot be longer than 32 characters!
-#define WLAN_PASS             "YourPASS"
+#define WLAN_SSID             "GMJLinksys"        // cannot be longer than 32 characters!
+#define WLAN_PASS             "ckr7518t"
 #define WLAN_SECURITY         WLAN_SEC_WPA2 // This can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 //#define  SOL_SOCKET           0xffff
 //#define  SOCKOPT_RECV_TIMEOUT 1 
@@ -432,10 +433,10 @@ void setup()
 // Per http://e2e.ti.com/support/low_power_rf/f/851/t/292664.aspx
 // aucInactivity needs to be set to 0 (never timeout) or the socket will close after
 // 60 seconds of no activity
-  unsigned long aucDHCP       = 14400;
+  unsigned long aucDHCP       = 0xffffffff; //no timeout
   unsigned long aucARP        = 3600;
   unsigned long aucKeepalive  = 30;
-  unsigned long aucInactivity = 0;
+  unsigned long aucInactivity = 0; // no timeout
   if(aucInactivity == 0)
   {
     Serial.println(F("Setting netapp to not timeout..."));
@@ -1194,7 +1195,7 @@ void udpProcess()
     case showChip: // "2"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxChips)
+      if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1214,7 +1215,7 @@ void udpProcess()
     case getChipAddress: // "4"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxChips)
+      if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1227,7 +1228,7 @@ void udpProcess()
     case getChipStatus: // "5"
     {
       x = atoi((char *) &PacketBuffer[1]);
-     if(x > maxChips)
+     if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1267,7 +1268,7 @@ void udpProcess()
     case setSwitchState: // "6"
     {
      chipSelected = atoi((char *) &PacketBuffer[1]);
-     if(chipSelected > maxChips)
+     if(chipSelected >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1327,7 +1328,7 @@ void udpProcess()
     case getChipType: // "8"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxChips)
+      if(x >= maxChips)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1384,7 +1385,7 @@ void udpProcess()
         Serial.println(F("getActionArray"));
       }
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxActions)
+      if(x >= maxActions)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -1724,7 +1725,7 @@ void udpProcess()
     case setActionSwitch: // "E"
     {
       actionSelected = atoi((char *) &PacketBuffer[1]);
-     if(actionSelected > maxActions)
+     if(actionSelected >= maxActions)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
@@ -2138,7 +2139,7 @@ void udpProcess()
     case getPidArray: // "N"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if(x > maxPIDs)
+      if(x >= maxPIDs)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
       }else{
@@ -2241,7 +2242,7 @@ void udpProcess()
     case shortShowChip: // "R"
     {
       x = atoi((char *) &PacketBuffer[1]);
-      if( x > maxChips)
+      if( x >= maxChips )
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
       }else{
@@ -2277,6 +2278,19 @@ void udpProcess()
       }
       
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Name Updated");
+      sendUDPpacket();
+      break;
+    }
+
+    case showActionStatus:  // "T"
+    {
+      x = atoi((char *) &PacketBuffer[1]);
+      if( x >= maxActions )
+      {
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
+      }else{
+        actionStatus(x);
+      }
       sendUDPpacket();
       break;
     }
@@ -2411,41 +2425,45 @@ void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
   }
 }
 
+void actionStatus(int x)
+{
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].actionEnabled);
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  if(action[x].tempPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tempPtr->chipStatus);
+  }
+    
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+    
+  if(action[x].tcPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].tcPtr->chipStatus);
+  }
+
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+
+  if(action[x].thPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].thPtr->chipStatus);
+  }   
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooCold);
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooHot);
+}
 
 void getAllActionStatus(void)
 {
   for( int x = 0; x < maxActions; x++ )
   {
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].actionEnabled);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    if(action[x].tempPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-    }else{
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tempPtr->chipStatus);
-    }
-    
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    
-    if(action[x].tcPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-    }else{
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].tcPtr->chipStatus);
-    }
-    
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    
-    if(action[x].thPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-    }else{
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].thPtr->chipStatus);
-    }   
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooCold);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooHot);
+    actionStatus(x);
     if( x < (maxActions - 1) )
     {
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",";");
