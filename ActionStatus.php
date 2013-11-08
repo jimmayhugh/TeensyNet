@@ -29,7 +29,7 @@
 //    echo "SensorStatus.php: \$netID = ".$netID.", \$service_port = ".$service_port.", \$port_address = ".$port_address.", \$netName = ".$netName."<br />";
     $headStr = "
       <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">
-      <title> Sensor / Action Status </title>
+      <title> Action Status </title>
       <link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\"/>
       <style type=\"text/css\" rel=\"stylesheet\">
         #masterStop {
@@ -56,7 +56,7 @@
       <meta charset=\"UTF-8\">
       <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/Test/index.php\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/Test/index.php\"
+          window.location.href = \"http://localhost/index.php\"
       </script>";
   }
   echo $headStr;

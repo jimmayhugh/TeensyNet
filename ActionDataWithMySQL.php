@@ -80,9 +80,9 @@
   }else{
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/Test/index.php\">
+      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/index.php\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/Test/index.php\"
+          window.location.href = \"http://localhost/index.php\"
       </script>";
   }
 
@@ -135,6 +135,14 @@
     echo "\$in3 = ".$in."<br />";
     $out = udpRequest($service_port, $port_address, $in);
     $out3 = $out;
+    
+    if($actionEnable === "0")
+    {
+      $in = $setActionSwitch.$actionCnt.$tooHot."F\n";
+      $killSwitch = udpRequest($service_port, $port_address, $in);
+      $in = $setActionSwitch.$actionCnt.$tooCold."F\n";
+      $killSwitch = udpRequest($service_port, $port_address, $in);
+    }
 
     $in = $saveToEEPROM."\n";
     $out = udpRequest($service_port, $port_address, $in);
@@ -170,9 +178,9 @@
     
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/Test/ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\">
+      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/Test/ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\"
+          window.location.href = \"http://localhost/ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\"
       </script>";
 
   }else{ // entry from Action Status.php

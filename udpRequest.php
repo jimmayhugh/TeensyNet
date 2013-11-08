@@ -27,6 +27,8 @@ $useDebug           = "P";
 $restoreStructures  = "Q";
 $shortShowChip      = "R";
 $updateChipName     = "S";
+$showActionStatus   = "T";
+$setAction          = "U";
 
 $clearAndReset      = "x";
 $clearEEPROM        = "y";
@@ -48,7 +50,7 @@ function udpRequest($service_port, $port_address, $in)
 $myPID = getmypid();
 error_reporting(~E_WARNING);
 
-$fileName = "/var/log/udp.log";   
+$fileName = "/var/log/teensynet/udp_".$service_port."_".$port_address.".log";   
 $socBufSize = 2048;
 
   if(!($socket = socket_create(AF_INET, SOCK_DGRAM, 0)))
@@ -78,7 +80,7 @@ $socBufSize = 2048;
   do{
     fwrite($fr, "\nservice_port = $service_port, port_address = $port_address, pid = $myPID\n");
     socket_sendto($socket, $in , strlen($in) , 0 , $service_port , $port_address);
-    fwrite($fr, "command sent: ".$in."\n");
+    fwrite($fr, "command sent: ".$in);
 
     socket_recvfrom($socket, $result, $socBufSize, MSG_WAITALL, $service_port, $port_address);
       
@@ -122,7 +124,7 @@ $socBufSize = 2048;
     die();
   }
 
-  fwrite($fr, "packet received:\n".$resultStr."\n");
+  fwrite($fr, "packet received:\n".$resultStr);
   fclose($fr);
 
   socket_close($socket);

@@ -51,7 +51,7 @@
   $bodyStr="<table width=\"100%\" border=\"2\" cellspacing=\"0\" cellpadding=\"5\">
               <tr>
                 <td align=\"center\" colspan=\"5\">
-                  <h2><font color = \"blue\">PID STATUS</font></h2>
+                  <h2><font color = \"blue\">PID STATUS<br />$netName </font></h2>
                 </td>
                <tr>
                 <td align=\"center\" colspan=\"5\">

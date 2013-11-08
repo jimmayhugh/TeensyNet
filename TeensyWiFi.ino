@@ -114,6 +114,7 @@ const uint8_t restoreStructures  = useDebug + 1;          // "Q"
 const uint8_t shortShowChip      = restoreStructures + 1; // "R"
 const uint8_t updateChipName     = shortShowChip + 1;     // "S"
 const uint8_t showActionStatus   = updateChipName + 1;    // "T"
+const uint8_t setAction          = showActionStatus + 1;  // "U"
 
 const uint8_t clearAndReset      = 'x';
 const uint8_t clearEEPROM        = 'y';
@@ -2290,6 +2291,29 @@ void udpProcess()
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","ERROR");
       }else{
         actionStatus(x);
+      }
+      sendUDPpacket();
+      break;
+    }
+    
+    case setAction: // "U"
+    {
+      result = strtok( PacketBuffer, delim );
+      char* actionArrayCtr      = strtok( NULL, delim );
+      char* actionEnabledVal    = strtok( NULL, delim );
+      
+      x = atoi(actionArrayCtr);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "Action %d ", x);
+      if (atoi(actionEnabledVal) == 0)
+      {
+        setChipState = ds2406PIOAoff;
+        actionSwitchSet((uint8_t *) action[x].tcPtr->chipAddr, setChipState);
+        actionSwitchSet((uint8_t *) action[x].thPtr->chipAddr, setChipState);
+        action[x].actionEnabled = FALSE;
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "DISABLED");
+      }else{
+        action[x].actionEnabled = TRUE;
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ENABLED");
       }
       sendUDPpacket();
       break;

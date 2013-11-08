@@ -47,7 +47,7 @@
   $bodyStr="<table width=\"100%\" border=\"2\" cellspacing=\"0\" cellpadding=\"5\">
               <tr>
                 <td align=\"center\" colspan=\"5\">
-                  <h2><font color =\"blue\">Sensor / Action Status<br />".$netName."</font></h2>
+                  <h2><font color =\"blue\">Action Status<br />".$netName."</font></h2>
                 </td>
                <tr>
                 <td align=\"center\" colspan=\"5\">
@@ -72,7 +72,6 @@
                </tr>
                <tr>";
   
-//  for($x=0;$x<5;$x++)
   for($x=0;$x<$actionNum;$x++)
   {
     
@@ -153,22 +152,26 @@
            <input type=\"hidden\" name=\"netID\" value=\"".$netID."\">
            <input type=\"submit\" value=\"MODIFY\">
          </form>";
-/*
+
+    $bodyStr .=
+       "<form method=\"post\" action=\"plotData.php\">
+         <input type=\"hidden\" name=\"graphId\" value=\"".$x."\">
+         <input type=\"hidden\" name=\"netID\" value=\"".$netID."\">
+         <input type=\"hidden\" name=\"actionCnt\" value=\"".$x."\">
+         <input type=\"hidden\" name=\"service_port\" value=\"".$service_port."\">
+         <input type=\"hidden\" name=\"port_address\" value=\"".$port_address."\">
+         <input type=\"hidden\" name=\"netName\" value=\"".$netName."\">";
+
     if($trimStr === "1")
     {
-      $bodyStr.=
-         "<form method=\"post\" action=\"plotData.php\">
-           <input type=\"hidden\" name=\"graphId\" value=\"".$x."\">
-           <input type=\"submit\" value=\"GRAPH\">
-         </form>";
+      $bodyStr .=
+         "<input type=\"submit\" value=\"GRAPH\">";
     }else{
-      $bodyStr.=
-         "<form method=\"post\" action=\"plotData.php\">
-           <input type=\"hidden\" name=\"graphId\" value=\"".$x."\">
-           <input type=\"submit\" value=\"GRAPH\" disabled>
-         </form>";
+      $bodyStr .=
+         "<input type=\"submit\" value=\"GRAPH\" disabled>";
     }
-*/
+      $bodyStr .= "</form>";
+
     $bodyStr .= 
        "</td>
      </tr>
@@ -209,10 +212,10 @@
               jQuery(document).ready(function(){
                 jQuery('#ajaxtc".$x."off').click(function(event){
                   jQuery.ajax({
+                    cache: false,
                     type: \"GET\",
                     url: \"setActionSwitch.php\",
-                    data: 'data=".$x.$tooCold."F',
-                    cache: false,
+                    data: \"data=".$x.$tooCold."F&service_port=$service_port&port_address=$port_address&netName=$netName\"
                     });
                 });
               });
@@ -220,10 +223,10 @@
               jQuery(document).ready(function(){
                 jQuery('#ajaxtc".$x."on').click(function(event){
                   jQuery.ajax({
+                    cache: false,
                     type: \"GET\",
                     url: \"setActionSwitch.php\",
-                    data: 'data=".$x.$tooCold."N',
-                    cache: false,
+                    data: \"data=".$x.$tooCold."N&service_port=$service_port&port_address=$port_address&netName=$netName\"
                     });
                 });
               });
@@ -242,28 +245,38 @@
     {
         $bodyStr .= "
           Too Cold<br />".$trimStr4."&deg;<br \>".$tcName."<br />
-          <font size=\"10\" color=\"green\"><strong>ON</strong></font>
-          <br />
+          <font size=\"10\" color=\"green\"><strong>ON</strong></font>";
+      if($trimStr === "0")
+      {
+        $bodyStr .=
+          "<br />
           <div id=\"ajaxtc".$x."on\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>ON</span>
           </div>
           <div id=\"ajaxtc".$x."off\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>OFF</span>
-          </div>
-          </td>
+          </div>";
+       }
+       $bodyStr .=
+          "</td>
           </div>";
     }else if($trimStr2 === "F"){
         $bodyStr .= "
           Too Cold<br />".$trimStr4."&deg;<br \>".$tcName."<br />
-          <font size=\"10\" color=\"red\"><strong>OFF</strong></font>
-          <br />
+          <font size=\"10\" color=\"red\"><strong>OFF</strong></font>";
+      if($trimStr === "0")
+      {
+        $bodyStr .=    
+          "<br />
           <div id=\"ajaxtc".$x."on\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>ON</span>
           </div>
           <div id=\"ajaxtc".$x."off\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>OFF</span>
-          </div>
-        </div>";
+          </div>";
+      }
+      $bodyStr .=
+        "</div>";
     }else{
         $bodyStr .= "
             <div>
@@ -278,10 +291,10 @@
             jQuery(document).ready(function(){
               jQuery('#ajaxth".$x."off').click(function(event){
                jQuery.ajax({
+                 cache: false,
                  type: \"GET\",
                  url: \"setActionSwitch.php\",
-                 data: 'data=".$x.$tooHot."F',
-                 cache: false,
+                 data: \"data=".$x.$tooHot."F&service_port=$service_port&port_address=$port_address&netName=$netName\"
                 });
               });
             });
@@ -289,10 +302,10 @@
           jQuery(document).ready(function(){
             jQuery('#ajaxth".$x."on').click(function(event){
               jQuery.ajax({
+                 cache: false,
                 type: \"GET\",
                 url: \"setActionSwitch.php\",
-                data: 'data=".$x.$tooHot."N',
-                cache: false,
+                data: \"data=".$x.$tooHot."N&service_port=$service_port&port_address=$port_address&netName=$netName\"
                 });
             });
           });
@@ -310,29 +323,39 @@
     {
       $bodyStr .= "
           Too Hot<br />".$trimStr5."&deg;<br \>".$thName."<br />
-          <font size=\"10\" color=\"green\"><strong>ON</strong></font>
-          <br />
+          <font size=\"10\" color=\"green\"><strong>ON</strong></font>";
+      if($trimStr === "0")
+      {
+        $bodyStr .=    
+          "<br />
           <div id=\"ajaxth".$x."on\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>ON</span>
           </div>
           <div id=\"ajaxth".$x."off\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>OFF</span>
-          </div>
-        </td>
+          </div>";
+      }
+      $bodyStr .=
+        "</td>
       </div>";
     }else if($trimStr3 === "F"){
       $bodyStr .= "
         Too Hot<br />".$trimStr5."&deg;<br \>".$thName."<br />
-        <font size=\"10\" color=\"red\"><strong>OFF</strong></font>
-        <br />
+        <font size=\"10\" color=\"red\"><strong>OFF</strong></font>";
+      if($trimStr === "0")
+      {
+        $bodyStr .=
+          "<br />
           <div id=\"ajaxth".$x."on\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>ON</span>
           </div>
           <div id=\"ajaxth".$x."off\" style=\"text-align:center; vertical-align:middle; min-width:150px\">
             <span>OFF</span>
-          </div>
-</td>
-</div>";
+          </div>";
+      }
+      $bodyStr .= 
+        "</td>
+      </div>";
     }else{
         $bodyStr .= "
           <div>
