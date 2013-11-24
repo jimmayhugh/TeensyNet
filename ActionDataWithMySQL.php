@@ -250,7 +250,21 @@
                         <input type=\"radio\" name=\"enable\" value=\"1\">Enable&nbsp;&nbsp;</input>
                         <input type=\"radio\" name=\"enable\" value=\"0\" checked>Disable</input>";
     }
+    $containerStr .= "      </td></tr><tr><td align=\"center\" colspan=\"3\">";
+    $containerStr .= "         Action LCD #".$actionCnt."
+                <br />";
+    if($actionArray[$aaLcd] === "1")
+    {
+      $containerStr .= "<font color=\"green\"><strong>ENABLED&nbsp;&nbsp;</strong></font>
+                        <input type=\"radio\" name=\"lcd\" value=\"1\" checked>Enable&nbsp;&nbsp;</input>
+                        <input type=\"radio\" name=\"lcd\" value=\"0\">Disable</input>";
+    }else{
+      $containerStr .= "<font color=\"red\"><strong>DISABLED&nbsp;&nbsp;</strong></font>
+                        <input type=\"radio\" name=\"lcd\" value=\"1\">Enable&nbsp;&nbsp;</input>
+                        <input type=\"radio\" name=\"lcd\" value=\"0\" checked>Disable</input>";
+    }
     $containerStr .= "      </td></tr>";
+    
     $tempAddrArray = explode(",", $actionArray[$aaTempAddr]);
     if( ($tempAddrArray[0] === "0x30") ||
         ($tempAddrArray[0] === "0x28") ||

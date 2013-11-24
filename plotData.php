@@ -2,6 +2,8 @@
   include_once('/var/www/htdocs/PHP_GnuPlot.php'); 
   include_once("/var/www/htdocs/accessDatabase.php");
 
+  error_reporting(E_ERROR);
+
   if(isset($_GET["netName"])) 
   {
     $service_port=$_GET["service_port"];

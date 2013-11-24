@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.2
-Last Modified 11/07/2013
+Version 0.0.5
+Last Modified 11/16/2013
 By Jim Mayhugh
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -53,7 +53,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   General Setup
 */
 
-const char* versionStr = "TeensyNet WIZ-LCD Version 0.0.2, 11/07/2013";
+const char* versionStr = "TeensyNet WIZ-LCD Version 0.0.5, 11/16/2013";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -77,6 +77,8 @@ const uint16_t wifiDebug       = 0x0080; //   128
 const uint16_t udpHexBuff      = 0x0100; //   256
 const uint16_t chipNameDebug   = 0x0200; //   512
 const uint16_t actionDebug     = 0x0400; //  1024
+const uint16_t lcdDebug        = 0x0800; //  2048
+const uint16_t crcDebug        = 0x1000; //  4096
 
 uint16_t setDebug = 0x0000;  
 
@@ -114,6 +116,7 @@ const uint8_t updateChipName     = shortShowChip + 1;     // "S"
 const uint8_t showActionStatus   = updateChipName + 1;    // "T"
 const uint8_t setAction          = showActionStatus + 1;  // "U"
 
+const uint8_t displayMessage     = 'w';
 const uint8_t clearAndReset      = 'x';
 const uint8_t clearEEPROM        = 'y';
 const uint8_t versionID          = 'z';
@@ -275,7 +278,7 @@ PID PID1(&ePID[1].pidInput,   &ePID[1].pidOutput,  &ePID[1].pidSetPoint,  (doubl
 PID PID2(&ePID[2].pidInput,   &ePID[2].pidOutput,  &ePID[2].pidSetPoint,  (double) ePID[2].pidKp,  (double) ePID[2].pidKi,  (double) ePID[2].pidKd,  ePID[2].pidDirection);
 PID PID3(&ePID[3].pidInput,   &ePID[3].pidOutput,  &ePID[3].pidSetPoint,  (double) ePID[3].pidKp,  (double) ePID[3].pidKi,  (double) ePID[3].pidKd,  ePID[3].pidDirection);
 
-PID *pidArrayPtr[] = {&PID0,&PID1,&PID2,&PID3};
+PID *pidArrayPtr[] = {&PID0, &PID1, &PID2, &PID3};
 
 // End PID Stuff
 
@@ -308,14 +311,16 @@ EthernetUDP Udp;
 // You can connect other I2C sensors to the I2C bus and share
 // the I2C bus.
 
-Adafruit_RGBLCDShield lcd0 = Adafruit_RGBLCDShield(0);
-Adafruit_RGBLCDShield lcd1 = Adafruit_RGBLCDShield(1);
-Adafruit_RGBLCDShield lcd2 = Adafruit_RGBLCDShield(2);
-Adafruit_RGBLCDShield lcd3 = Adafruit_RGBLCDShield(3);
-Adafruit_RGBLCDShield lcd4 = Adafruit_RGBLCDShield(4);
-Adafruit_RGBLCDShield lcd5 = Adafruit_RGBLCDShield(5);
-Adafruit_RGBLCDShield lcd6 = Adafruit_RGBLCDShield(6);
-Adafruit_RGBLCDShield lcd7 = Adafruit_RGBLCDShield(7);
+Adafruit_RGBLCDShield LCD0 = Adafruit_RGBLCDShield(0);
+Adafruit_RGBLCDShield LCD1 = Adafruit_RGBLCDShield(1);
+Adafruit_RGBLCDShield LCD2 = Adafruit_RGBLCDShield(2);
+Adafruit_RGBLCDShield LCD3 = Adafruit_RGBLCDShield(3);
+Adafruit_RGBLCDShield LCD4 = Adafruit_RGBLCDShield(4);
+Adafruit_RGBLCDShield LCD5 = Adafruit_RGBLCDShield(5);
+Adafruit_RGBLCDShield LCD6 = Adafruit_RGBLCDShield(6);
+Adafruit_RGBLCDShield LCD7 = Adafruit_RGBLCDShield(7);
+
+Adafruit_RGBLCDShield *lcd[] = { &LCD0, &LCD1, &LCD2, &LCD3, &LCD4, &LCD5, &LCD6, &LCD7 };
 
 // These #defines make it easy to set the backlight color
 #define RED 0x1
@@ -325,6 +330,9 @@ Adafruit_RGBLCDShield lcd7 = Adafruit_RGBLCDShield(7);
 #define BLUE 0x4
 #define VIOLET 0x5
 #define WHITE 0x7
+
+uint8_t lcdChars = 20;
+uint8_t lcdRows  = 4;
 
 // End LCD Stuff
 
@@ -427,16 +435,16 @@ void setup()
   Serial.print(F("My IP address: "));
   Serial.println(Ethernet.localIP());
   
-  lcd7.begin(20, 4);
-  lcd7.clear();
-  lcd7.home();
-  lcd7.print(F("   Hello World!    "));
-  lcd7.setCursor(0, 2);
-  lcd7.print(F(" My IP address is:  "));
-  lcd7.setCursor(0, 3);
-  lcd7.print(F("   "));
-  lcd7.print(Ethernet.localIP());
-  lcd7.print(F("   "));
+  lcd[7]->begin(lcdChars, lcdRows);
+  lcd[7]->clear();
+  lcd[7]->home();
+  lcd[7]->print(F("   Hello World!    "));
+  lcd[7]->setCursor(0, 2);
+  lcd[7]->print(F(" My IP address is:  "));
+  lcd[7]->setCursor(0, 3);
+  lcd[7]->print(F("   "));
+  lcd[7]->print(Ethernet.localIP());
+  lcd[7]->print(F("   "));
 
   timer = millis();
   timer2 = millis();
@@ -492,6 +500,14 @@ void loop()
   if(timer > (millis() + 5000)) // in case of rollover
   {
     timer = millis();
+  }
+  
+  for(int i = 0; i < maxChips; i++)
+  {
+    if(chip[i].tempTimer > (millis() + 5000)) // in case of rollover
+    {
+      chip[i].tempTimer = millis();
+    }
   }
   
   updateChipStatus(chipX);
@@ -2129,6 +2145,84 @@ void udpProcess()
       sendUDPpacket();
       break;
     }
+
+    case displayMessage: // "w"
+    {
+      result = strtok( PacketBuffer, delim );
+
+      char* lcdDisplayStr  = strtok( NULL, delim );
+      char* lcdLineCtr     = strtok( NULL, delim );
+      char* clrLcdStr      = strtok( NULL, delim );
+      char* lcdMessage     = strtok( NULL, delim );
+      
+      uint8_t lcdDisplay = atoi(lcdDisplayStr);
+      uint8_t lcdLine = atoi(lcdLineCtr);
+      uint8_t clrLCD = atoi(clrLcdStr);
+      
+      uint8_t msgLength = strlen(lcdMessage);
+      
+        if(setDebug & lcdDebug)
+        {
+          Serial.print(F("lcdMessage is "));
+          Serial.println(lcdMessage);
+          for( int t = 0; t < msgLength; t++)
+          {
+            Serial.print(F("0x"));
+            if(lcdMessage[t] < 0x10)
+            {
+              Serial.print(F("0"));
+            }
+            Serial.print(lcdMessage[t], HEX);
+            if(t < (msgLength - 1))
+            {
+              Serial.print(F(", "));
+            }
+          }
+          Serial.println();
+        }
+      
+      if( msgLength > 21 )
+      {
+        if(setDebug & lcdDebug)
+        {
+          Serial.print(F("lcdMessage is "));
+          Serial.print(msgLength);
+          Serial.println(F(" too long, truncating"));
+        }
+        lcdMessage[20] = 0x0;
+      }
+      
+      if(clrLCD == 1)
+      {
+        lcd[lcdDisplay]->clear();
+        lcd[lcdDisplay]->home();
+      }
+      
+      lcd[lcdDisplay]->setCursor(0, lcdLine);
+      for(int s = 0; s < lcdChars; s++)
+      {
+        switch(lcdMessage[s])
+        {
+          case '_':
+          {
+            lcdMessage[s] = ' ';
+            break;
+          }
+          
+          case 0x0A:
+          case 0x0D:
+          {
+            lcdMessage[s] = 0x00;            
+            break;
+          }
+        }
+      }
+      lcd[lcdDisplay]->print(lcdMessage);
+
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "OK");
+      sendUDPpacket();
+      break;
+    }
     
     case clearAndReset: // "x"
     {
@@ -2534,8 +2628,17 @@ void updateChipStatus(int x)
           chipBuffer[i] = ds.read();
         }
         
-        if(ds.crc8(chipBuffer, 8) != chipBuffer[8]) break; // CRC invalid, try later
-  
+        if(ds.crc8(chipBuffer, 8) != chipBuffer[8])
+        {
+          if(setDebug & crcDebug)
+          {
+            Serial.print(F("crc Error chip["));
+            Serial.print(x);
+            Serial.println(F("], resetting timer"));
+          }
+          chip[x].tempTimer = 0; // restart the chip times
+          break; // CRC invalid, try later
+        }
       // convert the data to actual temperature
         unsigned int raw = (chipBuffer[1] << 8) | chipBuffer[0];
         if( showCelcius == TRUE)

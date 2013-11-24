@@ -48,6 +48,7 @@ function udpRequest($service_port, $port_address, $in)
 {
 
 $myPID = getmypid();
+
 error_reporting(~E_WARNING);
 
 $fileName = "/var/log/teensynet/udp_".$service_port."_".$port_address.".log";   
@@ -62,7 +63,7 @@ $socBufSize = 2048;
   }
 
 
-  if(!socket_set_option($socket,SOL_SOCKET,SO_RCVTIMEO,array("sec"=>5,"usec"=>0)))
+  if(!socket_set_option($socket,SOL_SOCKET,SO_RCVTIMEO,array("sec"=>2,"usec"=>0)))
   {
       die("Couldn't set Socket Receive Timeout\n");
   }
@@ -78,6 +79,7 @@ $socBufSize = 2048;
   $maxTries = 5;
   
   do{
+    $result = "";
     fwrite($fr, "\nservice_port = $service_port, port_address = $port_address, pid = $myPID\n");
     socket_sendto($socket, $in , strlen($in) , 0 , $service_port , $port_address);
     fwrite($fr, "command sent: ".$in);
@@ -97,6 +99,7 @@ $socBufSize = 2048;
       
       do{
         $resultStr .= $result;
+        $result = "";
         fwrite($fr, "requesting next segment: ".$in."\n");
         socket_sendto($socket, $in , strlen($in), 0 , $service_port , $port_address);
         socket_recvfrom($socket, $result, $socBufSize, MSG_WAITALL, $service_port, $port_address);
@@ -106,11 +109,13 @@ $socBufSize = 2048;
       if($result === '+')
       {
         fwrite($fr, "final segment received: ".$result."\n");
+        $result = "";
       }
       
       $in = "";
     }else{
       $resultStr .= $result;
+      $result = "";
     }
     $trimmedResultStr = trim($resultStr);
     $maxTries--;

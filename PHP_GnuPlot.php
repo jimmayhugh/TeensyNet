@@ -23,6 +23,8 @@
  * 
  **/ 
 
+error_reporting(E_ERROR);
+
 
 // change this if u need 
 //$GNUPLOT = 'C:\gnuplot\bin\pgnuplot.exe'; // for Windows 

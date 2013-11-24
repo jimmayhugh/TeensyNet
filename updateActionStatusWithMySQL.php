@@ -2,6 +2,9 @@
 
   include_once("udpRequest.php");
   include_once("accessDatabase.php");
+  
+  $actionDisable = 0;
+  $actionEnable  = 1;
 
   if(isset($_GET["netName"])) 
   {
@@ -84,7 +87,7 @@
     $trimStr4 = trim($chipXArray[4]);
     $trimStr5 = trim($chipXArray[5]);
     
-    $query = "select * from action where id=".$x;
+    $query = "SELECT * FROM action WHERE id=".$x." AND netID=".$netID;
     $result = mysqli_query($link,$query);
     if($result != NULL && mysqli_num_rows($result) > 0)
     {
@@ -102,9 +105,10 @@
     {
       $finfo = mysqli_fetch_object($result);
       $temperatureName = $finfo->name;
+//      $bodyStr .= "\$temperatureName = $temperatureName <br />";
       mysqli_free_result($result);
     }
-    if($temperatureName == ""){$temperatureName = "Temp Sensor ".$x;}
+//    if($temperatureName == ""){$temperatureName = "Temp Sensor ".$x;}
     
     $query = "select * from chipNames where address='".$tooHotAddress."'";
     $result = mysqli_query($link,$query);
@@ -143,6 +147,69 @@
       $bodyStr .=
         "<font color=\"yellow\"><strong>UNKNOWN = ".$trimStr."</strong></font><br />";
     }
+    
+    $bodyStr .= 
+        "<div id=\"enaction".$x." \"style=\"text-align:center; vertical-align:middle; min-width:75px\">
+        <script>
+          jQuery(document).ready(function(){
+            jQuery('#ajaxAction".$x."disable').click(function(event){
+             jQuery.ajax({
+               cache: false,
+               type: \"GET\",
+               url: \"setActionEnable.php\",
+               data: \"action=".$x."&state=".$actionDisable."&service_port=$service_port&port_address=$port_address&netName=$netName\"
+              });
+            });
+          });
+
+        jQuery(document).ready(function(){
+          jQuery('#ajaxAction".$x."enable').click(function(event){
+            jQuery.ajax({
+               cache: false,
+              type: \"GET\",
+              url: \"setActionEnable.php\",
+              data: \"action=".$x."&state=".$actionEnable."&service_port=$service_port&port_address=$port_address&netName=$netName\"
+              });
+          });
+        });
+      </script>
+      <style>
+        #ajax{cursor:pointer;}
+        #ajaxAction".$x."enable{margin-bottom:0px;}
+        #ajaxAction".$x."enable span{display:block;max-width:75px;padding:1px;background-color:#00FF00;color:#000;text-align:center;border-width:1; border-color:gray;}
+        #ajaxAction".$x."enable span:hover{display:block;max-width:75px;padding:1px;background-color:#000;color:#FFFF00;;text-align:center;border-width:1; border-color:gray;}
+        #ajaxAction".$x."disable{margin-bottom:0px;;text-align:center;border-width:1; border-color:gray;}
+        #ajaxAction".$x."disable span{display:block;max-width:75px;padding:1px;margin-bottom:0px;background-color:#FF0000;color:#000;border-width:1;text-align:center; border-color:gray;}
+        #ajaxAction".$x."disable span:hover{display:block;max-width:75px;padding:1px;background-color:#000;color:#FFFF00;;text-align:center;border-width:1; border-color:gray;}
+      </style>";
+      
+     $bodyStr .=
+        "</div>";
+
+      if($trimStr1 !== "NULL")
+      {
+       $bodyStr .=
+        "<table border=\"0\" width=\"25%\" cellspacing=\"0\" cellpadding=\"0\">
+          <tr>
+            <td>
+              &nbsp;
+            </td>
+            <td style=\"border-style:solid;border-width:1; border-color:gray;\">";
+        if($trimStr === "0")
+        {
+          $bodyStr .=    
+            "<div id=\"ajaxAction".$x."enable\" style=\"text-align:center; vertical-align:middle; min-width:75px; border-color:gray;\">
+              <span><strong>ENABLE</strong></span>
+            </div>";
+        }else{
+          $bodyStr .=    
+            "<div id=\"ajaxAction".$x."disable\" style=\"text-align:center; vertical-align:middle; min-width:75px border-color:gray;\">
+              <span><strong>DISABLE</strong></span>
+            </div>";
+        }
+       $bodyStr .=
+        "</td><td>&nbsp;</td></tr></table>";
+      }
     $bodyStr .= 
         "<form method=\"post\" action=\"ActionDataWithMySQL.php\">
            <input type=\"hidden\" name=\"actionCnt\" value=\"".$x."\">
