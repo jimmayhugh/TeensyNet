@@ -84,9 +84,9 @@
 		            // $updateArrayData1 = $row[1]." 0 ".$row[2]." ";
 		            // $updateArrayData2 = $row[4]." ".$row[5]." ".$row[3]." ";
 		            // $updateArrayData3 = $row[7]." ".$row[8]." ".$row[6]." ";
-		            $updateArrayData1 = $actionObj->active." 0 ".$actionObj->tempAddr." ";
-		            $updateArrayData2 = $actionObj->tcTrigger." ".$actionObj->tcDelay." ".$actionObj->tcAddr." ";
-		            $updateArrayData3 = $actionObj->thTrigger." ".$actionObj->thDelay." ".$actionObj->thAddr." ";
+		            $updateArrayData1 = $actionObj->active." 0 ".$actionObj->lcd." ".$actionObj->tempAddr." ";
+		            $updateArrayData2 = $actionObj->tcTrigger." ".$actionObj->tcDelay." 0 ".$actionObj->tcAddr." ";
+		            $updateArrayData3 = $actionObj->thTrigger." ".$actionObj->thDelay." 0 ".$actionObj->thAddr." ";
 
 		            $in = $updateActionArray." ".$actionObj->id." 1 ".$updateArrayData1."\n";
 		            $out = udpRequest($service_port, $port_address, $in);

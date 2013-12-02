@@ -44,6 +44,14 @@
   $escapedTempName="";
   $escapedTcName="";
   $escapedThName="";
+
+  $lcdOptionStr="<option value=\"32\">LCD0</option>
+                 <option value=\"33\">LCD1</option>
+                 <option value=\"34\">LCD2</option>
+                 <option value=\"35\">LCD3</option>
+                 <option value=\"36\">LCD4</option>
+                 <option value=\"37\">LCD5</option>
+                 <option value=\"38\">LCD6</option>";
   
   
   if( (isset($_POST["netID"]) && $_POST["netID"] >= 0) )
@@ -106,19 +114,19 @@
     echo "\$tempAddrQuery = ".$tempAddrQuery."<br />";
     $tempAddrResult = mysqli_query($link, $tempAddrQuery);
     $tempAddrObj = mysqli_fetch_object($tempAddrResult);
-    $updateArrayData1 = $actionEnable." 0 ".$tempAddress." ";
+    $updateArrayData1 = $actionEnable." 0 ".$lcd." ".$tempAddress." ";
     echo "\$updateArrayData1 = ".$updateArrayData1."<br />";
     
     $tcAddrQuery = "SELECT name FROM chipNames WHERE address='".$tcSwitchAddr."' AND netID='".$netID."'";
     $tcAddrResult = mysqli_query($link, $tcAddrQuery);
     $tcAddrObj = mysqli_fetch_object($tcAddrResult);
-    $updateArrayData2 = $tcTemp." ".$tcDelay." ".$tcSwitchAddr." ";
+    $updateArrayData2 = $tcTemp." ".$tcDelay." 0 ".$tcSwitchAddr." ";
     echo "\$updateArrayData2 = ".$updateArrayData2."<br />";
     
     $thAddrQuery = "SELECT name FROM chipNames WHERE address='".$thSwitchAddr."' AND netID='".$netID."'";
     $thAddrResult = mysqli_query($link, $thAddrQuery);
     $thAddrObj = mysqli_fetch_object($thAddrResult);
-    $updateArrayData3 = $thTemp." ".$thDelay." ".$thSwitchAddr." ";
+    $updateArrayData3 = $thTemp." ".$thDelay." 0 ".$thSwitchAddr." ";
     echo "\$updateArrayData3 = ".$updateArrayData3."<br />";
     
     $in = $updateActionArray." ".$actionCnt." 1 ".$updateArrayData1."\n";
@@ -251,9 +259,15 @@
                         <input type=\"radio\" name=\"enable\" value=\"0\" checked>Disable</input>";
     }
     $containerStr .= "      </td></tr><tr><td align=\"center\" colspan=\"3\">";
-    $containerStr .= "         Action LCD #".$actionCnt."
-                <br />";
-    if($actionArray[$aaLcd] === "1")
+    $containerStr .= "         Assign LCD: <select type=\"text\" name=\"lcd\">";
+              if( ($actionArray[$aaLCD] >= "32") && ($actionArray[$aaLCD] <= "38") )
+              {
+                $lcdVal = $actionArray[$aaLCD] - 32;
+                $containerStr .= "<option value=\"".$actionArray[$aaLCD]."\">LCD".$lcdVal."</option>";
+              }
+              $containerStr .= "<option value=\"0\">NONE</option>".$lcdOptionStr."</select>";
+/*
+    if($actionArray[$aaLCD] === "1")
     {
       $containerStr .= "<font color=\"green\"><strong>ENABLED&nbsp;&nbsp;</strong></font>
                         <input type=\"radio\" name=\"lcd\" value=\"1\" checked>Enable&nbsp;&nbsp;</input>
@@ -263,6 +277,7 @@
                         <input type=\"radio\" name=\"lcd\" value=\"1\">Enable&nbsp;&nbsp;</input>
                         <input type=\"radio\" name=\"lcd\" value=\"0\" checked>Disable</input>";
     }
+*/
     $containerStr .= "      </td></tr>";
     
     $tempAddrArray = explode(",", $actionArray[$aaTempAddr]);

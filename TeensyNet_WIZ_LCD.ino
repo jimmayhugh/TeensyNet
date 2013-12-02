@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.5
-Last Modified 11/16/2013
+Version 0.0.6
+Last Modified 12/02/2013
 By Jim Mayhugh
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -53,7 +53,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
   General Setup
 */
 
-const char* versionStr = "TeensyNet WIZ-LCD Version 0.0.5, 11/16/2013";
+const char* versionStr = "TeensyNet WIZ-LCD Version 0.0.6, 12/02/2013";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -157,7 +157,7 @@ const uint32_t ramUpdateTime = 10000;
 // OneWire Setup;
 const uint8_t oneWireAddress = 2; // OneWire Bus Address - TeensyNet-V4 board, use pin 2 for TeensyNet-V1 board
 const uint8_t chipAddrSize   = 8; // 64bit OneWire Address
-const uint8_t chipNameSize   = 20;
+const uint8_t chipNameSize   = 16;
 const uint8_t ds2406MemWr    = 0x55;
 const uint8_t ds2406MemRd    = 0xaa;
 const uint8_t ds2406AddLow   = 0x07;
@@ -180,7 +180,7 @@ const uint32_t tempReadDelay = 125;
 uint8_t chipAddrArray[chipAddrSize] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
 const char *charChipAddrArray = "0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00";
-const char *unassignedStr = "_____UNASSIGNED_____";
+const char *unassignedStr = "___UNASSIGNED___";
 
 
 typedef struct
@@ -224,16 +224,19 @@ typedef struct
   uint32_t   thDelay;
   uint32_t   thMillis;
   uint8_t    lcdAddr;
+  uint32_t   lcdMillis;
 }chipActionStruct;
 
-const chipActionStruct actionClear = { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0 };
+const chipActionStruct actionClear = { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 };
+
+const uint32_t lcdUpdateTimer = 1000;
 
 chipActionStruct action[maxActions] =
 {
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0 }
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 }
 };
 
 uint8_t chipBuffer[15] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -435,6 +438,20 @@ void setup()
   Serial.print(F("My IP address: "));
   Serial.println(Ethernet.localIP());
   
+  lcd[0]->begin(lcdChars, lcdRows);
+  lcd[0]->clear();
+  lcd[1]->begin(lcdChars, lcdRows);
+  lcd[1]->clear();
+  lcd[2]->begin(lcdChars, lcdRows);
+  lcd[2]->clear();
+  lcd[3]->begin(lcdChars, lcdRows);
+  lcd[3]->clear();
+  lcd[4]->begin(lcdChars, lcdRows);
+  lcd[4]->clear();
+  lcd[5]->begin(lcdChars, lcdRows);
+  lcd[5]->clear();
+  lcd[6]->begin(lcdChars, lcdRows);
+  lcd[6]->clear();
   lcd[7]->begin(lcdChars, lcdRows);
   lcd[7]->clear();
   lcd[7]->home();
@@ -448,6 +465,11 @@ void setup()
 
   timer = millis();
   timer2 = millis();
+  
+  action[0].lcdMillis = millis();
+  action[1].lcdMillis = millis();
+  action[2].lcdMillis = millis();
+  action[3].lcdMillis = millis();
   
   for(int q = 0; q < UDP_TX_PACKET_MAX_SIZE; q++) // clear the buffer udp buffers
   {
@@ -1284,6 +1306,8 @@ void udpProcess()
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%ld",(action[x].thDelay / 1000));
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s"," ");
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%ld",action[x].thMillis);
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s"," ");
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",action[x].lcdAddr);
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","\n");
       }
       sendUDPpacket();
@@ -1292,13 +1316,31 @@ void udpProcess()
     
     case updateActionArray: // "B"
     {
-      
+      if(setDebug & actionDebug)
+      {
+        Serial.println(PacketBuffer);
+      }
+     
       result = strtok( PacketBuffer, delim );
 
       while(1)
       {
+        if(setDebug & actionDebug)
+        {
+          Serial.print(F("resultCnt = "));
+          Serial.println(resultCnt);
+        }
+        
         result = strtok( NULL, delim );
+        
+        if(setDebug & actionDebug)
+        {
+          Serial.print(F("result = "));
+          Serial.println(result);
+        }
+        
         if(result == NULL){break;}
+        
         switch (resultCnt)
         {
           case 0: // action
@@ -1402,7 +1444,7 @@ void udpProcess()
             {
               if(setDebug & actionDebug)
               {
-                Serial.print(F("result = "));
+                Serial.print(F("Case 3: result = "));
                 Serial.println(result);
               }
               actionDelayVal = ((uint32_t) atoi(result));
@@ -1455,14 +1497,13 @@ void udpProcess()
             break;
           }
           
-          case 4:
+          case 5:
           {
             if(setDebug & actionDebug)
             {
-              Serial.print(F("Case 4 addrResult = "));
+              Serial.print(F("Case 5 addrResult = "));
               Serial.println(result);
             }
-            
             addrResult = strtok( result, addrDelim );
             while(addrResult != NULL)
             {
@@ -1527,8 +1568,38 @@ void udpProcess()
             }
             break;
           }
+          
+          case 4:
+          {
+            if(actionSection == 1)
+            {
+              if(setDebug & actionDebug)
+              {
+                Serial.print(F("Case 4 LCD = "));
+                Serial.println(result);
+              }
+              action[actionArray].lcdAddr = atoi(result);
+              if(setDebug & actionDebug)
+              {
+                Serial.print(F("action["));
+                Serial.print(actionArray);
+                Serial.print(F("].lcdAddr = "));
+                Serial.println(action[actionArray].lcdAddr);
+              }
+              if( (action[actionArray].lcdAddr >= 32 ) &&
+                  (action[actionArray].lcdAddr <= 38 )
+                )
+              {
+                action[actionArray].lcdMillis = millis();
+              }else{
+                action[actionArray].lcdMillis = 0;
+              }
+            }
+            break;
+          }
           break;
         }
+        
         resultCnt++;
       }
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","OK");
@@ -2724,6 +2795,9 @@ void updateChipStatus(int x)
 
 void updateActions(uint8_t x)
 {
+  uint8_t LCDx, y, tempStrCnt;
+  char tempStr[6];
+  uint32_t lcdUpdateStart, lcdUpdateStop;
 
   if(action[x].actionEnabled == TRUE)
   {
@@ -2757,6 +2831,113 @@ void updateActions(uint8_t x)
       actionSwitchSet((uint8_t *) &action[x].thPtr->chipAddr, ds2406PIOAoff);
       action[x].thMillis = millis();
                
+    }
+    
+    if( (action[x].lcdAddr >= 32 ) &&
+        (action[x].lcdAddr <= 38 ) &&
+        ( (action[x].lcdMillis + lcdUpdateTimer) <= millis())
+      )
+    {
+      if(setDebug & lcdDebug)
+      {
+        lcdUpdateStart = millis();
+      }
+      LCDx = (action[x].lcdAddr - 32);
+//      lcd[LCDx]->clear();
+      lcd[LCDx]->home();
+      lcd[LCDx]->print(F("     Action #"));
+      lcd[LCDx]->print(x);
+      lcd[LCDx]->print(F("      "));
+      lcd[LCDx]->setCursor(0, 1);
+      tempStrCnt = strlen(action[x].tempPtr->chipName);
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("tempStrCnt for "));
+        Serial.print(action[x].tempPtr->chipName);
+        Serial.print(F(" is "));
+        Serial.println(tempStrCnt);
+      }
+      lcd[LCDx]->print(action[x].tempPtr->chipName);
+      lcd[LCDx]->setCursor(tempStrCnt - 1, 1);
+      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
+      {
+        lcd[LCDx]->print(F(" "));
+      }
+      tempStrCnt = sprintf( tempStr, "%d", action[x].tcPtr->chipStatus);
+      switch(tempStrCnt)
+      {
+        case 1:
+          {
+            lcd[LCDx]->print(F("   "));            
+            break;
+          }
+        case 2:
+          {
+            lcd[LCDx]->print(F("  "));            
+            break;
+          }
+        case 3:
+          {
+            lcd[LCDx]->print(F(" "));            
+            break;
+          }
+      }
+      lcd[LCDx]->print(action[x].tempPtr->chipStatus);
+      lcd[LCDx]->setCursor(0, 2);
+      tempStrCnt = strlen(action[x].tcPtr->chipName);
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("tempStrCnt for "));
+        Serial.print(action[x].tcPtr->chipName);
+        Serial.print(F(" is "));
+        Serial.println(tempStrCnt);
+      }
+      lcd[LCDx]->print(action[x].tcPtr->chipName);
+      lcd[LCDx]->setCursor(tempStrCnt - 1, 2);
+      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
+      {
+        lcd[LCDx]->print(F(" "));
+      }
+      lcd[LCDx]->setCursor(16, 2);
+      if(action[x].tcPtr->chipStatus == 'N')
+      {
+        lcd[LCDx]->print(F(" ON "));
+      }else{
+        lcd[LCDx]->print(F(" OFF"));
+      }
+      
+      lcd[LCDx]->setCursor(0, 3);
+      tempStrCnt = strlen(action[x].thPtr->chipName);
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("tempStrCnt for "));
+        Serial.print(action[x].thPtr->chipName);
+        Serial.print(F(" is "));
+        Serial.println(tempStrCnt);
+      }
+      lcd[LCDx]->print(action[x].thPtr->chipName);
+      lcd[LCDx]->setCursor(tempStrCnt - 1, 3);
+      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
+      {
+        lcd[LCDx]->print(F(" "));
+      }
+      lcd[LCDx]->setCursor(16, 3);
+      if(action[x].thPtr->chipStatus == 'N')
+      {
+        lcd[LCDx]->print(F(" ON "));
+      }else{
+        lcd[LCDx]->print(F(" OFF"));
+      }
+      action[x].lcdMillis = millis();
+      
+      if(setDebug & lcdDebug)
+      {
+        lcdUpdateStop = millis();
+        Serial.print(F("lcdupdate took "));
+        Serial.print(lcdUpdateStop - lcdUpdateStart);
+        Serial.println(F(" milliseconds"));
+      }
+
     }
   }
 }
