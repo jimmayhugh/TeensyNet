@@ -2,7 +2,7 @@
 
 TeensyNet.ino
 
-Version 0.0.11
+Version 0.0.12
 Last Modified 12/28/2013
 By Jim Mayhugh
 
@@ -56,7 +56,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.11";
+const char* versionStrNumber = "Version 0.0.12";
 const char* versionStrDate   = "12/28/2013";
 
 // Should restart Teensy 3, will also disconnect USB during restart
@@ -85,7 +85,9 @@ const uint32_t lcdDebug        = 0x00000800; //  2048
 const uint32_t crcDebug        = 0x00001000; //  4096
 const uint32_t ds2762Debug     = 0x00002000; //  8192
 
-uint32_t setDebug = 0x00000000;  
+uint32_t setDebug = 0x00000800;
+
+uint8_t chipStartPin = 12;
 
 // define serial commands
 
@@ -529,7 +531,7 @@ uint8_t const lcdChars = 20;
 uint8_t const lcdRows  = 4;
 
 char lcdStr[lcdChars + 1];
-char blankLcdStr[lcdChars + 1];
+// char blankLcdStr[lcdChars + 1];
 
 // End LCD Stuff
 
@@ -537,6 +539,9 @@ void setup()
 {
 //  int x;
   Serial.begin(baudRate);
+  
+  pinMode(chipStartPin, OUTPUT);
+  digitalWrite(chipStartPin, HIGH); // sync pin for DSO
   
   if(setDebug > 0x0)
   {  
@@ -1149,6 +1154,8 @@ void findChips()
 {
  int cntx = 0, cmpCnt, cmpArrayCnt, dupArray = 0, cnty;
 
+  digitalWrite(chipStartPin, LOW); //start DSO sync
+
   ds.reset_search();
   delay(250);
   
@@ -1156,7 +1163,7 @@ void findChips()
   {
     strcpy(chip[cnty].chipName, "");
   }
-
+  
   while (ds.search(chip[cntx].chipAddr))
   {
     for(cmpCnt = 0; cmpCnt < cntx; cmpCnt++)
@@ -1251,6 +1258,7 @@ void findChips()
       Serial.println(F("s Detected"));
     }
   }  
+  digitalWrite(chipStartPin, HIGH); // end DSO sync
 }
 
 void sendUDPpacket(void)
@@ -2941,6 +2949,8 @@ void updateChipStatus(int x)
 {
   uint16_t chipCRCval, chipBufferCRC, noCRCmatch =1;
   
+  digitalWrite(chipStartPin, LOW); //start DSO sync
+
   switch(chip[x].chipAddr[0])
   {
     
@@ -3085,7 +3095,6 @@ void updateChipStatus(int x)
     
     case ds2406ID:
     {
-      
       while(noCRCmatch)
       {
         ds.reset();
@@ -3151,6 +3160,7 @@ void updateChipStatus(int x)
       break; 
     }
   }
+  digitalWrite(chipStartPin, HIGH); //stop DSO sync
 }
 
 void updateActions(uint8_t x)
@@ -3519,7 +3529,8 @@ void TC_Lookup(void)
 void lcdCenterStr(char *str)
 {
   uint8_t lcdPad;
-  strcpy(lcdStr, blankLcdStr);
+  for(uint x=0; x<lcdChars; x++) lcdStr[x] = 0x20; // fill lcdStr with spaces
+  
   if(strlen(str) > lcdChars+1)
   {
     strcpy(lcdStr, "  ERROR - TOO LONG  ");
@@ -3534,9 +3545,24 @@ void lcdCenterStr(char *str)
       Serial.println(F("String was exactly right for the LCD display"));
     }
   }else{
+    
+    if(setDebug & lcdDebug)
+    {
+      Serial.print(F("Input String = "));
+      Serial.println(str);
+      Serial.print(F("strlen(str) = "));
+      Serial.print(strlen(str));
+      Serial.println(F(" bytes"));
+    }
+
     lcdPad = (lcdChars - strlen(str)) / 2;
-    strcpy((char *) &lcdStr+lcdPad, str);
-    lcdStr[strlen(str) + lcdPad] = 0x20; // replace the NULL with a space
+    if(setDebug & lcdDebug)
+    {
+      Serial.print(F("lcdPad = "));
+      Serial.println(lcdPad);
+    }
+
+    memcpy(&lcdStr[lcdPad], str, strlen(str));
     if(setDebug & lcdDebug)
     {
       Serial.println(F("String was smaller than the LCD Display"));
