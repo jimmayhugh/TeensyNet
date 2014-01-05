@@ -5,6 +5,7 @@
   
   $actionDisable = 0;
   $actionEnable  = 1;
+  $maxActionsPerLine = 4;
 
   if(isset($_GET["netName"])) 
   {
@@ -75,7 +76,7 @@
                </tr>
                <tr>";
   
-  for($x=0;$x<$actionNum;$x++)
+  for($x=0, $z=1;$x<$actionNum;$x++)
   {
     
     $chipXArray = explode(",", $chipY[$x]);
@@ -431,7 +432,12 @@
     }
       $bodyStr .= "</td></tr>\n";
       $bodyStr .= "</table></td></div>\n";
-    if($x === 3 || $x === 5 || $x === 8){  $bodyStr .= "</tr><tr>\n";}
+//    if($x === 3 || $x === 7 || $x === 11){  $bodyStr .= "</tr><tr>\n";}
+    if($z++ === $maxActionsPerLine)
+    {
+      $bodyStr .= "</tr><tr>\n";
+      $z = 1;
+    }
   }
   $bodyStr .= "</tr>\n</table>";
 

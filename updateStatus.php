@@ -105,6 +105,8 @@
 */
     switch($chipID)
     {
+      case 0xAA:
+      case 0x30:
       case 0x28:
       {
 //        echo "temp device - ";
@@ -224,7 +226,7 @@
             "</div>"
             ;
           $z++;
-          if($z == $maxTempPerLine)
+          if($z === $maxTempPerLine)
           {
             $switchStr .= "
               </tr><tr>";

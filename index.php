@@ -69,8 +69,10 @@
       {
         $dvIn = $getChipCount."\n";
         $dvChipCount = udpRequest($dvRow[$service_port], $dvRow[$port_address], $dvIn);
+        $dvIn = $versionID."\n";
+        $dvVersionID = udpRequest($dvRow[$service_port], $dvRow[$port_address], $dvIn);
         $formStr .= 
-          "<td align = \"center\"><h2><font color=\"blue\">".$dvRow[$netName]."</font><br />Chip Count: ".$dvChipCount."</h2>";
+          "<td align = \"center\"><h2><font color=\"blue\">".$dvRow[$netName]."</font><br /><h2>Chip Count: ".$dvChipCount."</h2>";
         foreach($pageArray as $pageData)
         {
           $formStr .= 
@@ -91,7 +93,7 @@
             <input type=\"submit\" value=\"".$pageData[0]."\" style=\"height:35px; width:300px\">
           </form><br />";
         }
-        $formStr .= "</center></td>";
+        $formStr .= "<br />".$dvVersionID."</center></td>";
       }
       $formStr .= "</tr></table>";
       echo $formStr;
