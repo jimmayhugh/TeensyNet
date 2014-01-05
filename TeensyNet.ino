@@ -2,11 +2,11 @@
 
 TeensyNet.ino
 
-Version 0.0.12
-Last Modified 12/28/2013
+Version 0.0.14
+Last Modified 01/04/2014
 By Jim Mayhugh
 
-Will eventually use the external EEPROM for structure storage, and uses Teensy 3.1 board
+Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -50,14 +50,15 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <Wire.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
+#include "I2CEEPROMAnything.h"
 
 /*
   General Setup
 */
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.12";
-const char* versionStrDate   = "12/28/2013";
+const char* versionStrNumber = "Version 0.0.14";
+const char* versionStrDate   = "01/04/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -85,7 +86,7 @@ const uint32_t lcdDebug        = 0x00000800; //  2048
 const uint32_t crcDebug        = 0x00001000; //  4096
 const uint32_t ds2762Debug     = 0x00002000; //  8192
 
-uint32_t setDebug = 0x00000800;
+uint32_t setDebug = 0x00000004;
 
 uint8_t chipStartPin = 12;
 
@@ -180,8 +181,8 @@ const uint8_t ds2406ID       = 0x12; // Maxim DS2406+ digital switch
 const uint8_t dsPIO_A        = 0x20;
 const uint8_t dsPIO_B        = 0x40;
 
-const uint8_t maxChips       = 12; // Maximum number of Chips
-const uint8_t maxActions     = 4; // Maximum number of Actions
+const uint8_t maxChips       = 36; // Maximum number of Chips
+const uint8_t maxActions     = 12; // Maximum number of Actions
 
 OneWire  ds(oneWireAddress);
 
@@ -399,6 +400,30 @@ chipStruct chip[maxChips] =
   { {0,0,0,0,0,0,0,0}, 0, 0, "" },
   { {0,0,0,0,0,0,0,0}, 0, 0, "" },
   { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
+  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
   { {0,0,0,0,0,0,0,0}, 0, 0, "" }
 };
 
@@ -426,6 +451,14 @@ const uint32_t lcdUpdateTimer = 1000;
 
 chipActionStruct action[maxActions] =
 {
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
+  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
   { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
   { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
   { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
@@ -478,14 +511,19 @@ PID *pidArrayPtr[] = {&PID0, &PID1, &PID2, &PID3};
 
 // End PID Stuff
 
-//EEPROM Stuff
-const int   EEPROMsize       = 2048;   // Cortex M4
-const int   EEPROMidAddr     = 0x05;   // ID address to verify a previous EEPROM write
-const int   EEPROMccAddr     = 0x10;   // number of chips found during findchips()
-const int   EEPROMchipAddr   = 0x20;  // start address of structures
-const byte  EEPROMidVal      = 0x55;   // Shows that an EEPROM update has occurred 
-bool        eepromReady      = FALSE;
-int         eepromSpace, eeResult, EEPROMactionAddr, EEPROMpidAddr;
+
+//I2CEEPROM Stuff
+const uint32_t   I2CEEPROMsize       = 65536;   // MicroChip 24LC512
+const uint16_t   I2CEEPROMidAddr     = 0x05;    // ID address to verify a previous I2CEEPROM write
+const uint16_t   I2CEEPROMccAddr     = 0x10;    // number of chips found during findchips()
+const uint16_t   I2CEEPROMchipAddr   = 0x100;   // start address of structures
+const uint8_t    I2CEEPROMidVal      = 0x55;    // Shows that an EEPROM update has occurred 
+const uint8_t    I2C0x50             = 0x50;    // device address at 0x50
+const uint8_t    I2C0x51             = 0x51;    // device address at 0x51
+const uint8_t    pageSize            = 128;     // MicroChip 24LC512 buffer page
+bool             i2cEepromReady      = FALSE;
+uint16_t         i2cEepromSpace, I2CEEPROMactionAddr, I2CEEPROMpidAddr, i2cEeResult16;
+uint8_t          i2cEeResult;
 
 // Ethernet UDP Stuff
 // The IP address will be dependent on your local network:
@@ -495,7 +533,8 @@ char PacketBuffer[UDP_TX_PACKET_MAX_SIZE]; //buffer to hold incoming packet,
 char ReplyBuffer[UDP_TX_PACKET_MAX_SIZE];  // a string to send back
 
 
-const uint8_t wizReset = 23; // WIZ nic reset
+const uint8_t wizReset = 23;         // WIZ nic reset
+
 unsigned int localPort = 2652;      // local port to listen on
 
 // An EthernetUDP instance to let us send and receive packets over UDP
@@ -538,6 +577,7 @@ char lcdStr[lcdChars + 1];
 void setup()
 {
 //  int x;
+  Wire.begin();
   Serial.begin(baudRate);
   
   pinMode(chipStartPin, OUTPUT);
@@ -552,22 +592,21 @@ void setup()
   Serial.print(baudRate);
   Serial.println(F(" baud"));
 
-  eeResult = EEPROM.read(EEPROMidAddr);
-  
+  I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   if(setDebug & eepromDebug)
   { 
-    Serial.print(F("eeResult = 0x"));
-    Serial.println(eeResult, HEX);
+    Serial.print(F("i2cEeResult = 0x"));
+    Serial.println(i2cEeResult, HEX);
   }
   
-  if(eeResult != 0x55)
+  if(i2cEeResult != 0x55)
   {
     if(setDebug & eepromDebug)
     { 
-       Serial.println(F("No EEPROM Data"));
+       Serial.println(F("No I2CEEPROM Data"));
     }
   
-    eepromReady = FALSE;
+    i2cEepromReady = FALSE;
     findChips();
     saveStructures();
   }else{
@@ -576,12 +615,12 @@ void setup()
     { 
       Serial.println(F("Getting EEPROM Data"));
     }
-
-    chipCnt = EEPROM.read(EEPROMccAddr);
+    
+    I2CEEPROM_readAnything(I2CEEPROMccAddr, chipCnt, I2C0x50);
     
     if(setDebug & eepromDebug)
     { 
-      Serial.print(F("chipCnt at EEPROMccAddr =  "));
+      Serial.print(F("chipCnt at I2CEEPROMccAddr =  "));
       Serial.println(chipCnt);
     }
 
@@ -591,7 +630,7 @@ void setup()
       Serial.println(F("EEPROM Data Read Completed"));
     }
   
-    eepromReady = TRUE;
+    i2cEepromReady = TRUE;
     
   }
   
@@ -605,20 +644,6 @@ void setup()
     Serial.println(F(" bytes in pid structure Array"));
   }
 
-/*
-  delay(1000);
-  if(setDebug & udpDebug)
-  {
-    Serial.println(F("Resetting WIZ nic"));
-  }
-
-  pinMode(wizReset, OUTPUT);
-  digitalWrite(wizReset, LOW);
-  delay(1000);
-  digitalWrite(wizReset, HIGH);
-  
-  delay(1000);
-*/
   if(setDebug & udpDebug)
   {
     Serial.println(F("Configuring IP"));
@@ -647,7 +672,7 @@ void setup()
     Serial.println(Ethernet.localIP());
   }
   
-  
+// send startup data to status LCD (I2C address 0x27) if available  
   lcd[0]->begin(lcdChars, lcdRows);
   lcd[0]->clear();
   lcd[1]->begin(lcdChars, lcdRows);
@@ -805,90 +830,90 @@ void pidSetup(void)
 
 void readStructures(void)
 {  
-  eepromSpace = 0;
+  i2cEepromSpace = 0;
 
-  eeResult = EEPROM.read(EEPROMidAddr);
+  I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
   if(setDebug & eepromDebug)
   { 
-    Serial.print(F("eeResult = 0x"));
-    Serial.println(eeResult, HEX);
+    Serial.print(F("i2cEeResult = 0x"));
+    Serial.println(i2cEeResult, HEX);
   }
   
-  if(eeResult != 0x55)
+  if(i2cEeResult != 0x55)
   {
     if(setDebug & eepromDebug)
     { 
        Serial.println(F("No EEPROM Data"));
     }
-    eepromReady = FALSE;
+    i2cEepromReady = FALSE;
   }else{
     if(setDebug & eepromDebug)
     { 
        Serial.println(F("EEPROM Data Valid"));
     }
-    eepromReady = TRUE;
+    i2cEepromReady = TRUE;
   }
   
   if(setDebug & eepromDebug)
   {
     Serial.println(F("Entering readStructures"));
-    Serial.print(F("EEPROMchipAddr = 0x"));
-    Serial.println(EEPROMchipAddr, HEX);
+    Serial.print(F("I2CEEPROMchipAddr = 0x"));
+    Serial.println(I2CEEPROMchipAddr, HEX);
   }
 
-  eeResult = EEPROM_readAnything(EEPROMchipAddr, chip);
+  i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMchipAddr, chip, I2C0x50);
 
-  eepromSpace += eeResult;
+  i2cEepromSpace += i2cEeResult16;
 
   if(setDebug & eepromDebug)
   {
     Serial.print(F("Read "));
-    Serial.print(eeResult);
+    Serial.print(i2cEeResult16);
     Serial.print(F(" bytes from address Ox"));
-    Serial.println(EEPROMchipAddr, HEX);
+    Serial.println(I2CEEPROMchipAddr, HEX);
   }
 
-  EEPROMactionAddr = (eeResult + EEPROMchipAddr + 0x10) & 0xFFFF0;
+  I2CEEPROMactionAddr = (i2cEeResult16 + I2CEEPROMchipAddr + 0x10) & 0xFFF0;
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("EEPROMactionAddr = 0x"));
-    Serial.println(EEPROMactionAddr, HEX);
+    Serial.print(F("I2CEEPROMactionAddr = 0x"));
+    Serial.println(I2CEEPROMactionAddr, HEX);
   }
 
-  eeResult = EEPROM_readAnything(EEPROMactionAddr, action);
+  i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMactionAddr, action,  I2C0x50);
 
-  eepromSpace += eeResult;
+  i2cEepromSpace += i2cEeResult16;
 
   if(setDebug & eepromDebug)
   {
     Serial.print(F("Read "));
-    Serial.print(eeResult);
+    Serial.print(i2cEeResult16);
     Serial.print(F(" bytes from address Ox"));
-    Serial.println(EEPROMactionAddr, HEX);
+    Serial.println(I2CEEPROMactionAddr, HEX);
   }
 
-  EEPROMpidAddr =  (EEPROMactionAddr + eeResult + 0x10) & 0xFFFF0;
+  I2CEEPROMpidAddr =  (I2CEEPROMactionAddr + i2cEeResult + 0x10) & 0xFFF0;
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("EEPROMpidAddr = 0x"));
-    Serial.println(EEPROMpidAddr, HEX);
+    Serial.print(F("I2CEEPROMpidAddr = 0x"));
+    Serial.println(I2CEEPROMpidAddr, HEX);
   }
 
-  eeResult = EEPROM_readAnything(EEPROMpidAddr, ePID);
+  i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMpidAddr, ePID,  I2C0x50);
 
-  eepromSpace += eeResult;
+  i2cEepromSpace += i2cEeResult16;
 
   if(setDebug & eepromDebug)
   {
     Serial.print(F("Read "));
-    Serial.print(eeResult);
+    Serial.print(i2cEeResult16);
     Serial.print(F(" bytes from address Ox"));
-    Serial.println(EEPROMpidAddr, HEX);
+    Serial.println(I2CEEPROMpidAddr, HEX);
     Serial.print(F("readStructures() EEPROM Data Read of "));
-    Serial.print(eepromSpace);
+    Serial.print(i2cEepromSpace);
     Serial.println(F(" bytes Completed"));
     Serial.println(F("Exiting readStructures"));
     Serial.println(F("Chip Structure"));
@@ -908,55 +933,55 @@ void saveStructures(void)
   if(setDebug & eepromDebug)
   {
     Serial.println(F("Entering saveStructures"));
-    Serial.print(F("EEPROMchipAddr = 0x"));
-    Serial.println(EEPROMchipAddr, HEX);
+    Serial.print(F("I2CEEPROMchipAddr = 0x"));
+    Serial.println(I2CEEPROMchipAddr, HEX);
   }
-  eepromSpace = 0;
-  EEPROM.write(EEPROMccAddr, chipCnt);
-  EEPROM.write(EEPROMidAddr, EEPROMidVal);
-  eeResult = EEPROM_writeAnything(EEPROMchipAddr, chip);
+  i2cEepromSpace = 0;
+  I2CEEPROM_writeAnything(I2CEEPROMccAddr, chipCnt, I2C0x50);
+  I2CEEPROM_writeAnything(I2CEEPROMidAddr, I2CEEPROMidVal, I2C0x50);
+  i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMchipAddr, chip, I2C0x50);
   if(setDebug & eepromDebug)
   {
     Serial.print(F("Wrote "));
-    Serial.print(eeResult);
+    Serial.print(i2cEeResult);
     Serial.print(F(" bytes to address Ox"));
-    Serial.print(EEPROMchipAddr, HEX);
+    Serial.print(I2CEEPROMchipAddr, HEX);
     Serial.print(F(" from address 0x"));
     uint32_t chipStructAddr = (uint32_t) &chip[0];
     Serial.println(chipStructAddr, HEX);
   }
-  eepromSpace += eeResult;
-  EEPROMactionAddr = (eeResult + EEPROMchipAddr + 0x10) & 0xFFFF0;
+  i2cEepromSpace += i2cEeResult16;
+  I2CEEPROMactionAddr = (i2cEeResult16 + I2CEEPROMchipAddr + 0x10) & 0xFFF0;
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("EEPROMactionAddr = 0x"));
-    Serial.println(EEPROMactionAddr, HEX);
+    Serial.print(F("I2CEEPROMactionAddr = 0x"));
+    Serial.println(I2CEEPROMactionAddr, HEX);
   }
-  eeResult = EEPROM_writeAnything(EEPROMactionAddr, action);
-  eepromSpace += eeResult;
+  i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMactionAddr, action, I2C0x50);
+  i2cEepromSpace += i2cEeResult16;
   if(setDebug & eepromDebug)
   {
     Serial.print(F("Wrote "));
-    Serial.print(eeResult);
+    Serial.print(i2cEeResult16);
     Serial.print(F(" bytes to address Ox"));
-    Serial.println(EEPROMactionAddr, HEX);
+    Serial.println(I2CEEPROMactionAddr, HEX);
   }
-  EEPROMpidAddr =  (EEPROMactionAddr + eeResult + 0x10) & 0xFFFF0;
+  I2CEEPROMpidAddr =  (I2CEEPROMactionAddr + i2cEeResult16 + 0x10) & 0xFFF0;
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("EEPROMpidAddr = 0x"));
-    Serial.println(EEPROMpidAddr, HEX);
+    Serial.print(F("I2CEEPROMpidAddr = 0x"));
+    Serial.println(I2CEEPROMpidAddr, HEX);
   }
-  eeResult = EEPROM_writeAnything(EEPROMpidAddr, ePID);
-  eepromSpace += eeResult;
+  i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMpidAddr, ePID, I2C0x50);
+  i2cEepromSpace += i2cEeResult16;
   if(setDebug & eepromDebug)
   {
     Serial.print(F("Wrote "));
-    Serial.print(eeResult);
+    Serial.print(i2cEeResult16);
     Serial.print(F(" bytes to address Ox"));
-    Serial.println(EEPROMpidAddr, HEX);
+    Serial.println(I2CEEPROMpidAddr, HEX);
     Serial.print(F("saveStructures() EEPROM Data Write of "));
-    Serial.print(eepromSpace);
+    Serial.print(i2cEepromSpace);
     Serial.println(F(" bytes Completed - Displaying chip Structures"));
     displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
     Serial.println(F("Action Structure"));
@@ -965,27 +990,27 @@ void saveStructures(void)
     displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
     Serial.println(F("Exiting saveStructures"));
   }
-  eeResult = EEPROM.read(EEPROMidAddr);
+  I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
   if(setDebug & eepromDebug)
   { 
-    Serial.print(F("eeResult = 0x"));
-    Serial.println(eeResult, HEX);
+    Serial.print(F("i2cEeResult = 0x"));
+    Serial.println(i2cEeResult, HEX);
   }
   
-  if(eeResult != 0x55)
+  if(i2cEeResult != 0x55)
   {
     if(setDebug & eepromDebug)
     { 
        Serial.println(F("EEPROM Data Erased"));
     }
-    eepromReady = FALSE;
+    i2cEepromReady = FALSE;
   }else{
     if(setDebug & eepromDebug)
     { 
        Serial.println(F("EEPROM Data Valid"));
     }
-    eepromReady = TRUE;
+    i2cEepromReady = TRUE;
   }
   
 }
@@ -1211,8 +1236,6 @@ void findChips()
       Serial.print(cntx);
       Serial.print(F(" Address 0x"));
       Serial.print((uint32_t) &(chip[cntx].chipAddr), HEX);
-//      Serial.print(F("Chip "));
-//      Serial.print(cntx);
       Serial.print(F(" = {"));
       
       for( int i = 0; i < chipAddrSize; i++)
@@ -1351,7 +1374,7 @@ void udpProcess()
     
     case getChipCount: // "3"
     {
-      chipCnt = EEPROM.read(EEPROMccAddr);
+      I2CEEPROM_readAnything(I2CEEPROMccAddr, chipCnt, I2C0x50);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", chipCnt);
       sendUDPpacket();
       break;
@@ -1993,11 +2016,10 @@ void udpProcess()
     
     case getEEPROMstatus: // "G"
     {
-      if(eepromReady == FALSE)
+      if(i2cEepromReady == FALSE)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","FALSE");
-      }else
-      {
+      }else{
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","TRUE");
       }
      sendUDPpacket();
@@ -2567,15 +2589,15 @@ void udpProcess()
       {
         Serial.println(F("EEPROMclear() completed"));
       }
-      eeResult = EEPROM.read(EEPROMidAddr);
+      I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
       if(setDebug & resetDebug)
       { 
-        Serial.print(F("eeResult = 0x"));
-        Serial.println(eeResult, HEX);
+        Serial.print(F("i2cEeResult = 0x"));
+        Serial.println(i2cEeResult, HEX);
       }
   
-      if(eeResult != 0x55)
+      if(i2cEeResult != 0x55)
       {
         if(setDebug & resetDebug)
         { 
@@ -3044,10 +3066,7 @@ void updateChipStatus(int x)
         ds.write(0x44);         // start conversion
         chip[x].tempTimer = millis();
       }
-/*    
-      delay(125);     // for 9 bit accuracy
-      // we might do a ds.depower() here, but the reset will take care of it.
-*/    
+
       if((chip[x].tempTimer != 0) && (millis() >= chip[x].tempTimer + tempReadDelay))
       {
         ds.reset();
@@ -3113,27 +3132,9 @@ void updateChipStatus(int x)
 
         chipCRCval = ~(ds.crc16(chipBuffer, 11)) & 0xFFFF;
         chipBufferCRC = ((chipBuffer[12] << 8) | chipBuffer[11]) ;
+
         if(setDebug & chipDebug)
         {
-/*
-          Serial.print(F("chipBuffer = "));
-          for(int i = 0; i < 13; i++)
-          {
-            if(chipBuffer[i] >= 0 && chipBuffer[i] <= 15)
-            {
-              Serial.print(F("0X0"));
-            }else{
-              Serial.print(F("0X"));
-            }
-            Serial.print(chipBuffer[i], HEX);
-            if(i < 13)
-            {
-              Serial.print(F(", "));
-            }else{
-              Serial.println();
-            }
-          }
-*/
           Serial.print(F("chip "));
           Serial.print(x);
           Serial.print(F(" chipCRC = 0X"));
@@ -3314,9 +3315,24 @@ void updateActions(uint8_t x)
 
 void EEPROMclear(void)
 {
-  for(int e = 0; e < EEPROMsize; e++)
+  uint8_t page[pageSize], y;
+  char I2CStr[chipNameSize+1];
+  uint32_t x;
+  lcd[7]->clear();
+  lcd[7]->home();
+  lcd[7]->print(F(" Clearing I2CEEPROM "));
+
+  for(y = 0; y < pageSize; y++) page[y] = 0xff;
+  for(x = 0; x < I2CEEPROMsize; x += pageSize)
   {
-    EEPROM.write(e, 0x0);
+    I2CEEPROM_writeAnything(x, page, I2C0x50);
+    lcd[7]->setCursor(0, 1);
+    sprintf(I2CStr, "0X%04X", (uint16_t) x);
+    lcdCenterStr(I2CStr);
+    lcd[7]->print(lcdStr);
+    lcd[7]->setCursor(0, 2);
+    lcdCenterStr("Bytes Cleared");
+    lcd[7]->print(lcdStr);
   }
   if(setDebug & eepromDebug)
   {
@@ -3328,6 +3344,9 @@ void EEPROMclear(void)
     Serial.println(F("PID Structure"));
     displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
   }
+  lcd[7]->setCursor(0, 3);
+  lcdCenterStr("Finished");
+  lcd[7]->print(lcdStr);
 }
 
 void MasterStop(void)
