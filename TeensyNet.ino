@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.14
-Last Modified 01/04/2014
+Version 0.0.16
+Last Modified 01/24/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -57,8 +57,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.14";
-const char* versionStrDate   = "01/04/2014";
+const char* versionStrNumber = "Version 0.0.16";
+const char* versionStrDate   = "01/24/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -86,7 +86,7 @@ const uint32_t lcdDebug        = 0x00000800; //  2048
 const uint32_t crcDebug        = 0x00001000; //  4096
 const uint32_t ds2762Debug     = 0x00002000; //  8192
 
-uint32_t setDebug = 0x00000004;
+uint32_t setDebug = 0x00000000;
 
 uint8_t chipStartPin = 12;
 
@@ -100,7 +100,7 @@ const uint8_t getChipStatus      = getChipAddress + 1; // "5"
 const uint8_t setSwitchState     = getChipStatus + 1;  // "6"
 const uint8_t getAllStatus       = setSwitchState + 1; // "7"
 const uint8_t getChipType        = getAllStatus + 1;   // "8"
-const uint8_t getAllChips        = getChipType + 1;    // "9" - last in this series
+const uint8_t getAllChips        = getChipType + 1;    // "9" - deprecated - do not use
 
 const uint8_t getActionArray     = 'A'; // start of new serial command list
 const uint8_t updateActionArray  = getActionArray + 1;    // "B"
@@ -525,7 +525,10 @@ bool             i2cEepromReady      = FALSE;
 uint16_t         i2cEepromSpace, I2CEEPROMactionAddr, I2CEEPROMpidAddr, i2cEeResult16;
 uint8_t          i2cEeResult;
 
-// Ethernet UDP Stuff
+// Ethernet Stuff
+
+// #define STATIC_IP // uncomment to use a static IP Address
+
 // The IP address will be dependent on your local network:
 // buffers for receiving and sending data
 
@@ -536,6 +539,11 @@ char ReplyBuffer[UDP_TX_PACKET_MAX_SIZE];  // a string to send back
 const uint8_t wizReset = 23;         // WIZ nic reset
 
 unsigned int localPort = 2652;      // local port to listen on
+
+// set up the static IP address if you want to use one
+#ifdef STATIC_IP
+IPAddress ip(192, 168, 1, 51);
+#endif
 
 // An EthernetUDP instance to let us send and receive packets over UDP
 EthernetUDP Udp;
@@ -658,8 +666,11 @@ void setup()
     Serial.println();
   }
   
-
-  if(Ethernet.begin((uint8_t *) &mac) == 0)
+#ifdef STATIC_IP  
+  Ethernet.begin((uint8_t *) &mac, ip); // use this for static IP
+    Udp.begin(localPort);
+#else  
+  if(Ethernet.begin((uint8_t *) &mac) == 0) // use this for dhcp
   {
     Serial.println(F("Ethernet,begin() failed - Resetting TeensyNet"));
     delay(1000);
@@ -671,7 +682,8 @@ void setup()
     Serial.print(F("My IP address: "));
     Serial.println(Ethernet.localIP());
   }
-  
+#endif
+
 // send startup data to status LCD (I2C address 0x27) if available  
   lcd[0]->begin(lcdChars, lcdRows);
   lcd[0]->clear();
@@ -1541,8 +1553,9 @@ void udpProcess()
       break;
     }
  
-    case getAllChips: // "9"
+    case getAllChips: // "9" - deprecated, do not use
     {
+/*
       for(x = 0; x < maxChips; x++)
       {
         showChipInfo(x);
@@ -1553,6 +1566,8 @@ void udpProcess()
         Serial.println(rBuffCnt);
         Serial.println(ReplyBuffer);
       }
+*/
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","DEPRICATED");
       sendUDPpacket();
       break;
     }
