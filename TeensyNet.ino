@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.16
-Last Modified 01/24/2014
+Version 0.0.18
+Last Modified 01/31/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -44,6 +44,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <SPI.h>
 #include <Ethernet.h>
 #include <EthernetUdp.h>  // UDP library from: bjoern@cs.stanford.edu 12/30/2008
+#include <EthernetBonjour.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <t3mac.h>
@@ -57,8 +58,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.16";
-const char* versionStrDate   = "01/24/2014";
+const char* versionStrNumber = "Version 0.0.18";
+const char* versionStrDate   = "01/31/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -548,6 +549,10 @@ IPAddress ip(192, 168, 1, 51);
 // An EthernetUDP instance to let us send and receive packets over UDP
 EthernetUDP Udp;
 
+elapsedMillis runBonjour;
+const uint16_t runBonjourTimeout = 5000;
+char IPaddrBuf[17];
+
 // LCD Stuff
 
 // The shield uses the I2C SCL and SDA pins. 
@@ -668,7 +673,7 @@ void setup()
   
 #ifdef STATIC_IP  
   Ethernet.begin((uint8_t *) &mac, ip); // use this for static IP
-    Udp.begin(localPort);
+  Udp.begin(localPort);
 #else  
   if(Ethernet.begin((uint8_t *) &mac) == 0) // use this for dhcp
   {
@@ -681,8 +686,19 @@ void setup()
 
     Serial.print(F("My IP address: "));
     Serial.println(Ethernet.localIP());
+    sprintf(IPaddrBuf, "TeensyNet%d", Ethernet.localIP()[3]);
   }
 #endif
+// start Bonjour service
+//  if(EthernetBonjour.begin("TeensyNetTURD"))
+  if(EthernetBonjour.begin(IPaddrBuf))
+  {
+    Serial.println(F("Bounjour Service started"));
+    EthernetBonjour.addServiceRecord("TeensyNetUDP._discover", localPort, MDNSServiceUDP);
+  }else{
+    Serial.println(F("Bounjour Service failed"));
+  }
+  EthernetBonjour.run();
 
 // send startup data to status LCD (I2C address 0x27) if available  
   lcd[0]->begin(lcdChars, lcdRows);
@@ -702,7 +718,8 @@ void setup()
   lcd[7]->begin(lcdChars, lcdRows);
   lcd[7]->clear();
   lcd[7]->home();
-  lcdCenterStr((char *) versionStrName);
+//  lcdCenterStr((char *) versionStrName);
+  lcdCenterStr((char *) IPaddrBuf);
   lcd[7]->print(lcdStr);
   lcd[7]->setCursor(0, 1);
   lcdCenterStr((char *) versionStrNumber);
@@ -770,6 +787,16 @@ void loop()
       Serial.println(PacketBuffer);
     }
     udpProcess();
+  }
+
+  if(runBonjour >= runBonjourTimeout)
+  {
+    if(setDebug & udpDebug)
+    {
+      Serial.println(F("EthernetBonjour.run()"));
+    }
+    runBonjour = runBonjour - runBonjourTimeout;
+    EthernetBonjour.run();
   }
   
   if(timer > (millis() + 5000)) // in case of rollover
@@ -2676,6 +2703,8 @@ void udpProcess()
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrNumber);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrDate);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",IPaddrBuff);
       sendUDPpacket();
       break;
     }
