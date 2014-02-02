@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.18
-Last Modified 01/31/2014
+Version 0.0.20
+Last Modified 02/01/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -58,8 +58,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.18";
-const char* versionStrDate   = "01/31/2014";
+const char* versionStrNumber = "Version 0.0.20";
+const char* versionStrDate   = "02/01/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -72,22 +72,23 @@ const char* versionStrDate   = "01/31/2014";
 #define WRITE_RESTART(val) ((*(volatile uint32_t *)RESTART_ADDR) = (val))
 
 
-const uint32_t resetDebug      = 0x00000001; //    1
-const uint32_t pidDebug        = 0x00000002; //    2
-const uint32_t eepromDebug     = 0x00000004; //    4
-const uint32_t chipDebug       = 0x00000008; //    8
-const uint32_t findChipDebug   = 0x00000010; //   16
-const uint32_t serialDebug     = 0x00000020; //   32
-const uint32_t udpDebug        = 0x00000040; //   64
-const uint32_t wifiDebug       = 0x00000080; //   128
-const uint32_t udpHexBuff      = 0x00000100; //   256
-const uint32_t chipNameDebug   = 0x00000200; //   512
-const uint32_t actionDebug     = 0x00000400; //  1024
-const uint32_t lcdDebug        = 0x00000800; //  2048
-const uint32_t crcDebug        = 0x00001000; //  4096
-const uint32_t ds2762Debug     = 0x00002000; //  8192
+const uint32_t resetDebug      = 0x00000001; //      1
+const uint32_t pidDebug        = 0x00000002; //      2
+const uint32_t eepromDebug     = 0x00000004; //      4
+const uint32_t chipDebug       = 0x00000008; //      8
+const uint32_t findChipDebug   = 0x00000010; //     16
+const uint32_t serialDebug     = 0x00000020; //     32
+const uint32_t udpDebug        = 0x00000040; //     64
+const uint32_t wifiDebug       = 0x00000080; //    128
+const uint32_t udpHexBuff      = 0x00000100; //    256
+const uint32_t chipNameDebug   = 0x00000200; //    512
+const uint32_t actionDebug     = 0x00000400; //   1024
+const uint32_t lcdDebug        = 0x00000800; //   2048
+const uint32_t crcDebug        = 0x00001000; //   4096
+const uint32_t ds2762Debug     = 0x00002000; //   8192
+const uint32_t bonjourDebug    = 0x00004000; //  16384
 
-uint32_t setDebug = 0x00000000;
+uint32_t setDebug = 0x00004044;
 
 uint8_t chipStartPin = 12;
 
@@ -101,7 +102,7 @@ const uint8_t getChipStatus      = getChipAddress + 1; // "5"
 const uint8_t setSwitchState     = getChipStatus + 1;  // "6"
 const uint8_t getAllStatus       = setSwitchState + 1; // "7"
 const uint8_t getChipType        = getAllStatus + 1;   // "8"
-const uint8_t getAllChips        = getChipType + 1;    // "9" - deprecated - do not use
+const uint8_t updateBonjour      = getChipType + 1;    // "9"
 
 const uint8_t getActionArray     = 'A'; // start of new serial command list
 const uint8_t updateActionArray  = getActionArray + 1;    // "B"
@@ -158,6 +159,7 @@ uint8_t *chipAddrPtr;
 bool serialMessageReady = FALSE;
 bool actionPtrMatch = FALSE;
 bool showCelsius = FALSE;
+uint16_t packetSize;
 
 uint32_t timer, timer2, startTime, endTime;
 const uint32_t updateTime = 250;
@@ -517,6 +519,7 @@ PID *pidArrayPtr[] = {&PID0, &PID1, &PID2, &PID3};
 const uint32_t   I2CEEPROMsize       = 65536;   // MicroChip 24LC512
 const uint16_t   I2CEEPROMidAddr     = 0x05;    // ID address to verify a previous I2CEEPROM write
 const uint16_t   I2CEEPROMccAddr     = 0x10;    // number of chips found during findchips()
+const uint16_t   I2CEEPROMbjAddr     = 0x50;    // start of Bonjour name buffer
 const uint16_t   I2CEEPROMchipAddr   = 0x100;   // start address of structures
 const uint8_t    I2CEEPROMidVal      = 0x55;    // Shows that an EEPROM update has occurred 
 const uint8_t    I2C0x50             = 0x50;    // device address at 0x50
@@ -551,8 +554,9 @@ EthernetUDP Udp;
 
 elapsedMillis runBonjour;
 const uint16_t runBonjourTimeout = 5000;
-char IPaddrBuf[17];
-
+// char IPaddrBuf[17];
+char bonjourBuf[35];
+char bonjourNameBuf[chipNameSize];
 // LCD Stuff
 
 // The shield uses the I2C SCL and SDA pins. 
@@ -606,10 +610,31 @@ void setup()
   Serial.println(F(" baud"));
 
   I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
+  
   if(setDebug & eepromDebug)
   { 
     Serial.print(F("i2cEeResult = 0x"));
     Serial.println(i2cEeResult, HEX);
+  }
+  
+  I2CEEPROM_readAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
+  
+  if(bonjourNameBuf[0] >= 0x20 && bonjourNameBuf[0] <= 0x7a)
+  { 
+    if(setDebug & eepromDebug)
+    { 
+      Serial.print(F("bonjourNameBuf = "));
+      Serial.println(bonjourNameBuf);
+    }
+  }else{
+    for(int x = 0; x < chipNameSize; x++)
+    {
+      bonjourNameBuf[x] = 0x0;
+    }
+    if(setDebug & eepromDebug)
+    { 
+      Serial.println(F("bonjourNameBuf Cleared"));
+    }
   }
   
   if(i2cEeResult != 0x55)
@@ -686,15 +711,20 @@ void setup()
 
     Serial.print(F("My IP address: "));
     Serial.println(Ethernet.localIP());
-    sprintf(IPaddrBuf, "TeensyNet%d", Ethernet.localIP()[3]);
+    if(!(bonjourNameBuf[0] >= 0x20 && bonjourNameBuf[0] <= 0x7a))
+    {
+      sprintf(bonjourNameBuf, "TeensyNet%d", Ethernet.localIP()[3]);
+    }
   }
 #endif
 // start Bonjour service
 //  if(EthernetBonjour.begin("TeensyNetTURD"))
-  if(EthernetBonjour.begin(IPaddrBuf))
+  if(EthernetBonjour.begin(bonjourNameBuf))
   {
     Serial.println(F("Bounjour Service started"));
-    EthernetBonjour.addServiceRecord("TeensyNetUDP._discover", localPort, MDNSServiceUDP);
+    sprintf(bonjourBuf, "%s._discover", bonjourNameBuf);
+    EthernetBonjour.addServiceRecord(bonjourBuf, localPort, MDNSServiceUDP);
+    I2CEEPROM_writeAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
   }else{
     Serial.println(F("Bounjour Service failed"));
   }
@@ -719,7 +749,7 @@ void setup()
   lcd[7]->clear();
   lcd[7]->home();
 //  lcdCenterStr((char *) versionStrName);
-  lcdCenterStr((char *) IPaddrBuf);
+  lcdCenterStr((char *) bonjourNameBuf);
   lcd[7]->print(lcdStr);
   lcd[7]->setCursor(0, 1);
   lcdCenterStr((char *) versionStrNumber);
@@ -752,7 +782,7 @@ void setup()
 
 void loop()
 {
-  int packetSize = Udp.parsePacket();
+  packetSize = Udp.parsePacket();
   if(packetSize)
   {
     if(setDebug & udpDebug)
@@ -1580,21 +1610,40 @@ void udpProcess()
       break;
     }
  
-    case getAllChips: // "9" - deprecated, do not use
+    case updateBonjour: // "9"
     {
-/*
-      for(x = 0; x < maxChips; x++)
+      PacketBuffer[packetSize-1] = 0x00;
+      sprintf(bonjourNameBuf, "%s", (char *) &PacketBuffer[1]);
+      EthernetBonjour.setBonjourName(bonjourNameBuf);
+      if(setDebug & bonjourDebug)
       {
-        showChipInfo(x);
+        Serial.print(F("Bounjour Name set to: "));
+        Serial.println(bonjourNameBuf);
       }
-      if(setDebug & udpDebug)
+      EthernetBonjour.removeAllServiceRecords();
+      if(setDebug & bonjourDebug)
       {
-        Serial.print(F("rBuffCnt = "));
-        Serial.println(rBuffCnt);
-        Serial.println(ReplyBuffer);
+        Serial.println(F("Bounjour Service Records Removed"));
+        Serial.print(F("Setting Bonjour Service record to "));
       }
-*/
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","DEPRICATED");
+      sprintf(bonjourBuf, "%s._discover", bonjourNameBuf);
+      if(setDebug & bonjourDebug)
+      {
+        Serial.println(bonjourBuf);
+      }
+      EthernetBonjour.addServiceRecord(bonjourBuf, localPort, MDNSServiceUDP);
+      
+      I2CEEPROM_writeAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
+      if(setDebug & bonjourDebug)
+      {
+        Serial.print(F("Saving "));
+        Serial.print(bonjourNameBuf);
+        Serial.println(F(" to I2CEEPROM"));
+      }
+      lcd[7]->setCursor(0, 0);
+      lcdCenterStr(bonjourNameBuf);
+      lcd[7]->print(lcdStr);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "Service Record set to %s", bonjourBuf);
       sendUDPpacket();
       break;
     }
@@ -2553,25 +2602,25 @@ void udpProcess()
       
       uint8_t msgLength = strlen(lcdMessage);
       
-        if(setDebug & lcdDebug)
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("lcdMessage is "));
+        Serial.println(lcdMessage);
+        for( int t = 0; t < msgLength; t++)
         {
-          Serial.print(F("lcdMessage is "));
-          Serial.println(lcdMessage);
-          for( int t = 0; t < msgLength; t++)
+          Serial.print(F("0x"));
+          if(lcdMessage[t] < 0x10)
           {
-            Serial.print(F("0x"));
-            if(lcdMessage[t] < 0x10)
-            {
-              Serial.print(F("0"));
-            }
-            Serial.print(lcdMessage[t], HEX);
-            if(t < (msgLength - 1))
-            {
-              Serial.print(F(", "));
-            }
+            Serial.print(F("0"));
           }
-          Serial.println();
+          Serial.print(lcdMessage[t], HEX);
+          if(t < (msgLength - 1))
+          {
+            Serial.print(F(", "));
+          }
         }
+        Serial.println();
+      }
       
       if( msgLength > 21 )
       {
@@ -2704,7 +2753,7 @@ void udpProcess()
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrDate);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",IPaddrBuff);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",bonjourNameBuf);
       sendUDPpacket();
       break;
     }
