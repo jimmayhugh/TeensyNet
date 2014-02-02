@@ -41,13 +41,22 @@
   }else{
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/Test/index.php\">
+      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/index.php\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/Test/index.php\"
+          window.location.href = \"http://localhost/index.php\"
       </script>";
   }
 
   $h2Header = "<font color=\"blue\">$netName<br />Update Names</font>";
+  
+  if(isset($_POST["devupdate"]) && $_POST["devupdate"] === "devupdate")
+  {
+    $in = $updateBonjour.$netName."\n";
+    $out = udpRequest($service_port, $port_address, $in);
+    $devUpdateStr = "UPDATE `netDevices` SET `netName`='$netName' WHERE `service_port`='$service_port'";
+    $devResult = mysqli_query($link, $devUpdateStr);
+    mysqli_free_result($devResult);
+  }
   
   if(isset($_POST["update"]) && $_POST["update"] === "update")
   {
@@ -135,10 +144,20 @@
             <tr>
               <td align=\"center\" colspan=\"2\" border=\"2\">
                 <h2>".$h2Header."</h2>
+                  <form method=\"post\" action=\"UpdateNames.php\">
+                    <input type=\"hidden\" name=\"devupdate\" value=\"devupdate\">
+                    <input type=\"hidden\" name=\"maxChipCnt\" value=\"".$maxChipCnt."\">
+                    <input type=\"hidden\" name=\"netID\" value=\"".$netID."\">
+                    <input type=\"text\" size=\"20\" maxlength=\"20\" name=\"netName\" value=\"".$netName."\">
+                    <input type=\"hidden\" name=\"service_port\" value=\"".$service_port."\">
+                    <input type=\"hidden\" name=\"port_address\" value=\"".$port_address."\">
+                    <br />
+                    <input type=\"submit\" value=\"UPDATE DEVICE NAME\">
+                  </form>
               </td>
-              </tr>
-              <tr>
-                <td align=\"center\">";
+            </tr>
+            <tr>
+              <td align=\"center\">";
             
             $in = "$getChipCount\n";
             $out = udpRequest($service_port, $port_address, $in);
