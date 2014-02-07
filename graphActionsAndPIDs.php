@@ -8,25 +8,41 @@
   $arrayTH     = 3;
   $arrayTcTemp = 4;
   $arrayThTemp = 5;
+
+  $fileName = "/var/log/teensynet/graph_update.log";   
+
+  if( ! $fr = fopen($fileName, "a+") )
+  {
+	  die("Could not open file:".$fileName."\n");
+  }else{
+    fwrite($fr, "\n");
+    fwrite($fr, date("D M j G:i:s Y"));
+    fwrite($fr, "\n");
+  } 
   
   $actionTime = date("U");
   $deviceQuery = "SELECT * FROM `netDevices` WHERE `netActive`=1";
+  fwrite($fr, $deviceQuery."\n");
   echo $deviceQuery."\n";
   $devResult = mysqli_query($link, $deviceQuery);
   if($devResult === FALSE)
   {
+    fwrite($fr, "device query Failed\n");
     die("device query Failed\n");
   }
   $devCnt = mysqli_num_rows($devResult);
+  fwrite($fr, $devCnt." device rows retrieved\n");
   echo $devCnt." device rows retrieved\n";
   while($devObj = mysqli_fetch_object($devResult))
   {
     $actionQuery = "SELECT * FROM `action` WHERE `netID`=".$devObj->netID." AND `active`=1";
+    fwrite($fr, $actionQuery."\n");
     echo $actionQuery."\n";
     $actionResult = mysqli_query($link, $actionQuery);
     if($actionResult === FALSE)
     {
-      die("action query Failed\n");
+      fwrite($fr, "action query Failed\n");
+//      die("action query Failed\n");
     }
     while($actionObj = mysqli_fetch_object($actionResult))
     {
@@ -68,15 +84,20 @@
         $actionTH = "NONE";
       }
       
-      $actionTooCold = $chipArray[$arrayTcTemp];
-      $actionTooHot = $chipArray[$arrayThTemp];
+      $actionTooCold = trim($chipArray[$arrayTcTemp]);
+      $actionTooHot = trim($chipArray[$arrayThTemp]);
 //    echo "Action #".$x." = ".$x."\n";
-      $actionInsertQuery = "INSERT INTO actionGraph SET `id`=$actionObj->id,`time`=$actionTime,`temp`=$actionTemp,`tcTemp`=$actionTooCold,`tcSwitch`='$actionTC',`thTemp`=$actionTooHot,`thSwitch`='$actionTH',`netID`=$devObj->netID,`netName`='$devObj->netName'";
+      $actionInsertQuery = "INSERT INTO actionGraph SET `id`=$actionObj->id,`time`=$actionTime,`temp`=$actionTemp,`tcTemp`=$actionTooCold,`tcSwitch`='$actionTC',";
+      $actionInsertQuery .= "`thTemp`=$actionTooHot,`thSwitch`='$actionTH',`netID`=$devObj->netID,`netName`='$devObj->netName'";
+      fwrite($fr, $actionInsertQuery."\n");
       echo $actionInsertQuery."\n";
       $actionInsertResult = mysqli_query($link, $actionInsertQuery);
       if($actionInsertResult === FALSE)
       {
-        die("Action Insert Failed\n");
+        fwrite($fr, "Action Insert Failed\n");
+//        die("Action Insert Failed\n");
+      }else{
+        fwrite($fr, "Action Insert Success\n");
       }
       mysqli_free_result($actionInsertResult);
     }
@@ -121,4 +142,5 @@
   }
 */
   mysqli_close($link);
+  fclose($fr);
 ?>
