@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.20
-Last Modified 02/01/2014
+Version 0.0.21
+Last Modified 02/10/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -35,6 +35,75 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 *********************/
 
+/*********************
+This code requires several changes in several libraries to work properly. This is due primarily to the limite amount of
+RAM that's available in the Arduino series versus the Teensy.
+
+-----------------------------------------
+/arduino/libraries/Ethernet/utility/w5100.cpp:
+replace:
+
+#define W5200_RESET_PIN 9
+
+with:
+
+#ifndef W5200_RESET_PIN
+#define W5200_RESET_PIN 9
+#endif
+------------------------------------------
+
+------------------------------------------
+/arduino/libraries/Ethernet/EthernetUDP.h:
+replace:
+
+#define UDP_TX_PACKET_MAX_SIZE 24
+
+with:
+
+#ifndef UDP_TX_PACKET_MAX_SIZE
+#define UDP_TX_PACKET_MAX_SIZE 24
+#endif
+------------------------------------------
+
+------------------------------------------
+/arduino/libraries/Wire/Wire.cpp:
+in the function TwoWire::begin(void);
+replace:
+
+#if F_BUS == 48000000
+	I2C0_F = 0x27;	// 100 kHz
+	// I2C0_F = 0x1A; // 400 kHz
+	// I2C0_F = 0x0D; // 1 MHz
+	I2C0_FLT = 4;
+#elif F_BUS == 24000000
+	I2C0_F = 0x1F; // 100 kHz
+	// I2C0_F = 0x45; // 400 kHz
+	// I2C0_F = 0x02; // 1 MHz
+	I2C0_FLT = 2;
+
+with:
+
+#if F_BUS == 48000000
+	//I2C0_F = 0x27;	// 100 kHz
+	I2C0_F = 0x1A; // 400 kHz
+	// I2C0_F = 0x0D; // 1 MHz
+	I2C0_FLT = 4;
+#elif F_BUS == 24000000
+	// I2C0_F = 0x1F; // 100 kHz
+	I2C0_F = 0x45; // 400 kHz
+	// I2C0_F = 0x02; // 1 MHz
+	I2C0_FLT = 2;
+
+*********************/
+
+
+#define W5200_RESET_PIN 9 // retains compatability with pjrc.com 
+                          // WIZ820io Adapter board http://www.pjrc.com/store/wiz820_sd_adaptor.html
+
+#define UDP_TX_PACKET_MAX_SIZE 2048
+
+
+
 #include <PID_v1.h>
 #include <math.h>
 #include <EEPROM.h>
@@ -58,8 +127,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.20";
-const char* versionStrDate   = "02/01/2014";
+const char* versionStrNumber = "Version 0.0.21";
+const char* versionStrDate   = "02/10/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -88,7 +157,7 @@ const uint32_t crcDebug        = 0x00001000; //   4096
 const uint32_t ds2762Debug     = 0x00002000; //   8192
 const uint32_t bonjourDebug    = 0x00004000; //  16384
 
-uint32_t setDebug = 0x00004044;
+uint32_t setDebug = 0x00000000;
 
 uint8_t chipStartPin = 12;
 
@@ -599,15 +668,16 @@ void setup()
   
   pinMode(chipStartPin, OUTPUT);
   digitalWrite(chipStartPin, HIGH); // sync pin for DSO
-  
-  if(setDebug > 0x0)
-  {  
-    delay(3000);
-  }
+    
+  delay(3000);
   
   Serial.print(F("Serial Debug running at "));
   Serial.print(baudRate);
   Serial.println(F(" baud"));
+  Serial.print(F("W5200_RESET_PIN = "));
+  Serial.println(W5200_RESET_PIN);
+  Serial.print(F("UDP_TX_PACKET_MAX_SIZE = "));
+  Serial.println(UDP_TX_PACKET_MAX_SIZE);
 
   I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
