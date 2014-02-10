@@ -236,7 +236,7 @@ const uint32_t ramUpdateTime = 10000;
 const uint32_t ds2762UpdateTime = 250;
 
 // OneWire Setup;
-const uint8_t oneWireAddress = 2; // OneWire Bus Address - TeensyNet-V4 board, use pin 2 for TeensyNet-V1 board
+const uint8_t oneWireAddress = 2; // OneWire Bus Address - use pin 2 for TeensyNet board
 const uint8_t chipAddrSize   = 8; // 64bit OneWire Address
 const uint8_t chipNameSize   = 16;
 const uint8_t ds2406MemWr    = 0x55;
