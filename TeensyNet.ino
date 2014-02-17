@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.21
-Last Modified 02/10/2014
+Version 0.0.25
+Last Modified 02/17/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -39,19 +39,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 This code requires several changes in several libraries to work properly. This is due primarily to the limite amount of
 RAM that's available in the Arduino series versus the Teensy.
 
------------------------------------------
-/arduino/libraries/Ethernet/utility/w5100.cpp:
-replace:
-
-#define W5200_RESET_PIN 9
-
-with:
-
-#ifndef W5200_RESET_PIN
-#define W5200_RESET_PIN 9
-#endif
-------------------------------------------
-
 ------------------------------------------
 /arduino/libraries/Ethernet/EthernetUDP.h:
 replace:
@@ -60,9 +47,8 @@ replace:
 
 with:
 
-#ifndef UDP_TX_PACKET_MAX_SIZE
-#define UDP_TX_PACKET_MAX_SIZE 24
-#endif
+#define UDP_TX_PACKET_MAX_SIZE 2048
+
 ------------------------------------------
 
 ------------------------------------------
@@ -94,20 +80,23 @@ with:
 	// I2C0_F = 0x02; // 1 MHz
 	I2C0_FLT = 2;
 
+
+/arduino/libraries/Wire/Wire.h
+replace
+
+#define BUFFER_LENGTH 32
+
+with
+
+#define BUFFER_LENGTH 130
+
+
 *********************/
-
-
-#define W5200_RESET_PIN 9 // retains compatability with pjrc.com 
-                          // WIZ820io Adapter board http://www.pjrc.com/store/wiz820_sd_adaptor.html
-
-#define UDP_TX_PACKET_MAX_SIZE 2048
-
-
 
 #include <PID_v1.h>
 #include <math.h>
 #include <EEPROM.h>
-#include "EEPROMAnything.h"
+//#include "EEPROMAnything.h"
 #include <OneWire.h>
 #include <errno.h>
 #include <SPI.h>
@@ -126,9 +115,17 @@ with:
   General Setup
 */
 
+#if __MK20DX128__
+const char* teensyType = "Teensy3.0 ";
+#elif __MK20DX256__
+const char* teensyType = "Teensy3.1 ";
+#else
+const char* teensyType = "UNKNOWN ";
+#endif
+
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "Version 0.0.21";
-const char* versionStrDate   = "02/10/2014";
+const char* versionStrNumber = "V-0.0.25";
+const char* versionStrDate   = "02/17/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -159,7 +156,9 @@ const uint32_t bonjourDebug    = 0x00004000; //  16384
 
 uint32_t setDebug = 0x00000000;
 
-uint8_t chipStartPin = 12;
+const uint8_t resetWIZ5200pin  = 9;
+const uint8_t chipStartPin     = 12;
+const uint8_t resetWIZ5100pin  = 23;
 
 // define serial commands
 
@@ -656,7 +655,7 @@ uint8_t const lcdChars = 20;
 uint8_t const lcdRows  = 4;
 
 char lcdStr[lcdChars + 1];
-// char blankLcdStr[lcdChars + 1];
+char versionBuf[lcdChars + 1];
 
 // End LCD Stuff
 
@@ -671,13 +670,31 @@ void setup()
     
   delay(3000);
   
-  Serial.print(F("Serial Debug running at "));
+  Serial.print(F("Serial Debug starting at "));
   Serial.print(baudRate);
   Serial.println(F(" baud"));
-  Serial.print(F("W5200_RESET_PIN = "));
-  Serial.println(W5200_RESET_PIN);
+  Serial.print(F("BUFFER_LENGTH = "));
+  Serial.println(BUFFER_LENGTH);
   Serial.print(F("UDP_TX_PACKET_MAX_SIZE = "));
   Serial.println(UDP_TX_PACKET_MAX_SIZE);
+  
+
+  lcd[7]->begin(lcdChars, lcdRows);
+  lcd[7]->clear();
+  lcd[7]->home();
+  lcd[7]->print(F("Serial Debug = "));
+  lcd[7]->print(baudRate);
+  lcd[7]->setCursor(0, 1);
+  lcd[7]->print(F("BUFFER_LENGTH = "));
+  lcd[7]->print(BUFFER_LENGTH);
+  lcd[7]->setCursor(0, 2);
+  lcd[7]->print(F("UDP_PACKET_MAX_SIZE"));
+  lcd[7]->setCursor(0, 3);
+  lcd[7]->print(F("        "));
+  lcd[7]->print(UDP_TX_PACKET_MAX_SIZE);
+  lcd[7]->print(F("        "));
+
+  delay(3000);
 
   I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
@@ -757,21 +774,30 @@ void setup()
     Serial.println(F("Configuring IP"));
   }
 
+  lcd[7]->clear();
+  lcd[7]->home();
+  lcd[7]->print(F("   Configuring IP   "));
+
   // start the Ethernet and UDP:
   read_mac();
   
   if(setDebug & udpDebug)
   {
+    Serial.print(F("MAC Address = "));
     print_mac();
     Serial.println();
   }
-  
+    
 #ifdef STATIC_IP  
   Ethernet.begin((uint8_t *) &mac, ip); // use this for static IP
   Udp.begin(localPort);
 #else  
   if(Ethernet.begin((uint8_t *) &mac) == 0) // use this for dhcp
   {
+    lcd[7]->setCursor(0, 1);
+    lcd[7]->print(F("  IP Config Failed  "));
+    lcd[7]->setCursor(0, 2);
+    lcd[7]->print(F("Resetting TeensyNet "));
     Serial.println(F("Ethernet,begin() failed - Resetting TeensyNet"));
     delay(1000);
     softReset();
@@ -815,19 +841,17 @@ void setup()
   lcd[5]->clear();
   lcd[6]->begin(lcdChars, lcdRows);
   lcd[6]->clear();
-  lcd[7]->begin(lcdChars, lcdRows);
   lcd[7]->clear();
   lcd[7]->home();
-//  lcdCenterStr((char *) versionStrName);
   lcdCenterStr((char *) bonjourNameBuf);
   lcd[7]->print(lcdStr);
   lcd[7]->setCursor(0, 1);
-  lcdCenterStr((char *) versionStrNumber);
+  sprintf(versionBuf, "%s%s", teensyType, versionStrNumber);
+  lcdCenterStr((char *) versionBuf);
   lcd[7]->print(lcdStr);
   lcd[7]->setCursor(0, 2);
   lcdCenterStr("My IP address is:");
   lcd[7]->print(lcdStr);
-//  lcd[7]->print(F(" My IP address is:  "));
   lcd[7]->setCursor(0, 3);
   lcd[7]->print(F("   "));
   lcd[7]->print(Ethernet.localIP());
@@ -2659,6 +2683,20 @@ void udpProcess()
 
     case displayMessage: // "w"
     {
+      /*********************
+      Display LCD String format is:
+      
+      lcdDisplayStr lcdLineCtr clrLcdStr lcdMessage
+      
+      where:
+      lcdDisplayStr is the i2c address of the display, currently 0 - 7
+      lcdLineCtr is the line on which to put the message 0 - 4
+      clrLcdStr clears the entire display
+      lcdMessage is the message string, currently 20 characters, more than 20 results in an error
+      
+      underscores are converted to spaces, line and carriage returns are zeroed out. 
+      
+      *********************/
       result = strtok( PacketBuffer, delim );
 
       char* lcdDisplayStr  = strtok( NULL, delim );
@@ -2819,6 +2857,7 @@ void udpProcess()
     {
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrName);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",teensyType);      
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrNumber);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrDate);
@@ -3754,3 +3793,4 @@ void lcdCenterStr(char *str)
     }
   }
 }
+
