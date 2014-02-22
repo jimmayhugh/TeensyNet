@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.25
-Last Modified 02/17/2014
+Version 0.0.26
+Last Modified 02/21/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -124,8 +124,8 @@ const char* teensyType = "UNKNOWN ";
 #endif
 
 const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "V-0.0.25";
-const char* versionStrDate   = "02/17/2014";
+const char* versionStrNumber = "V-0.0.26";
+const char* versionStrDate   = "02/21/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -2855,14 +2855,22 @@ void udpProcess()
     
     case versionID: // "z"
     {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrName);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", versionStrName);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",teensyType);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrNumber);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", teensyType);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", versionStrNumber);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",versionStrDate);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", versionStrDate);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", ");
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",bonjourNameBuf);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", bonjourNameBuf);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",", IP Address = ");
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", Ethernet.localIP()[0]);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", '.');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", Ethernet.localIP()[1]);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", '.');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", Ethernet.localIP()[2]);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", '.');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", Ethernet.localIP()[3]);
       sendUDPpacket();
       break;
     }
