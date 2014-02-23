@@ -78,7 +78,7 @@
               
           switch($dvNetworkCnt)
           {
-            default: 
+            default: // two or more devices with the same IP address
             {
               $dvDeleteStr = "DELETE FROM `netDevices` WHERE `service_port`='$value'";
       //        echo "<br />\$dvDeleteStr = $dvDeleteStr<br />";
@@ -95,41 +95,14 @@
               mysqli_free_result($dvResult);
               $dvNetworkDevicesStr = "SELECT * FROM `netDevices` WHERE service_port='$value'";
               $dvResult = mysqli_query($link, $dvNetworkDevicesStr);
-            } //fall through to update screen
-            
-/*            case 1:
-            {
-              $dvCnt++;
-              $dvObject = mysqli_fetch_object($dvResult);
-              $dvIn = $getChipCount."\n";
-              $dvChipCount = udpRequest($value, $dvObject->port_address, $dvIn);
-              $dvIn = $versionID."\n";
-              $dvVersionID = udpRequest($value, $dvObject->port_address, $dvIn);
-              $devStr .= 
-                "<td align = \"center\"><h2><font color=\"blue\">".$key."</font><br /><h2>Chip Count: ".$dvChipCount."</h2>";
-              foreach($pageArray as $pageData)
-              {
-                $devStr .= 
-                "<form method=\"post\" action=\"".$pageData[1]."\">\n";
-                if($pageData[0] === "Update Names")
-                {
-                  $devStr .= 
-                  "<input type=\"hidden\" name=\"stopUpdate\" value=\"1\">\n";
-                }else{
-                  $devStr .= 
-                  "<input type=\"hidden\" name=\"stopUpdate\" value=\"0\">\n";
-                }
-                $devStr .= 
-                  "<input type=\"hidden\" name=\"netID\" value=\"".$dvObject->netID."\">
-                  <input type=\"hidden\" name=\"netName\" value=\"".$dvObject->netName."\">
-                  <input type=\"hidden\" name=\"service_port\" value=\"".$dvObject->service_port."\">
-                  <input type=\"hidden\" name=\"port_address\" value=\"".$dvObject->port_address."\">
-                  <input type=\"submit\" value=\"".$pageData[0]."\" style=\"height:35px; width:300px\">
-                </form><br />";
-              }
-              $devStr .= $dvVersionID."</center></td>";
+              break;
             }
-*/
+            
+            case 1:
+            {
+              break;
+              // placeholder - fall through to screen update
+            }
           }
         }
         mysqli_free_result($dvResult);
