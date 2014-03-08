@@ -216,6 +216,7 @@
                 mysqli_free_result($result);
               
               if( ($chipID === "0x28") || 
+                  ($chipID === "0x3B") || 
                   ($chipID === "0x30") || 
                   ($chipID === "0xAA")
                 )

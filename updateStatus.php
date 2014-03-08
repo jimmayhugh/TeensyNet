@@ -106,6 +106,7 @@
     switch($chipID)
     {
       case 0xAA:
+      case 0x3B:
       case 0x30:
       case 0x28:
       {

@@ -204,11 +204,13 @@
     {
       $in = $showChip.$scCnt."\n";
       $out = udpRequest($service_port, $port_address, $in);
+//      echo "$out <br />";
       $chipArray = explode(" ", $out);
       $chipAddressArray = explode(",", $chipArray[0]);
       switch($chipAddressArray[$chipTypeStr])
       {
         case "0x28":
+        case "0x3B":
         case "0x30":
         case "0xAA":
         {
@@ -282,13 +284,16 @@
     
     $tempAddrArray = explode(",", $actionArray[$aaTempAddr]);
     if( ($tempAddrArray[0] === "0x30") ||
+        ($tempAddrArray[0] === "0x3B") ||
         ($tempAddrArray[0] === "0x28") ||
         ($tempAddrArray[0] === "0xAA")
       )
     {
       $tempAddrQueryStr = "SELECT * FROM chipNames where address='".$actionArray[$aaTempAddr]."' AND netID='".$netID."'";
+//      echo "\$tempAddrQueryStr = $tempAddrQueryStr<br />";
       $tempAddrQueryResult = mysqli_query($link, $tempAddrQueryStr);
       $tempAddrQueryObj = mysqli_fetch_object($tempAddrQueryResult);
+//      echo "\$tempAddrQueryObj->name = $tempAddrQueryObj->name<br />";
       $containerStr .= "<tr>
               <td align=\"center\" colspan=\"3\">
                 <table width=\"100%\" border=\"0\">

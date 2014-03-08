@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.27
-Last Modified 02/22/2014
+Version 0.0.29
+Last Modified 03/07/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -117,15 +117,16 @@ with
 
 #if __MK20DX128__
 const char* teensyType = "Teensy3.0 ";
+const char* versionStrName   = "TeensyNet 3.0";
 #elif __MK20DX256__
 const char* teensyType = "Teensy3.1 ";
+const char* versionStrName   = "TeensyNet 3.1";
 #else
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrName   = "TeensyNet 3.1";
-const char* versionStrNumber = "V-0.0.27";
-const char* versionStrDate   = "02/22/2014";
+const char* versionStrNumber = "V-0.0.29";
+const char* versionStrDate   = "03/07/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -246,6 +247,7 @@ const uint8_t ds2406PIOAoff  = 0x3f;
 const uint8_t ds2406PIOAon   = 0x1f;
 const uint8_t ds2406End      = 0xff;
 const uint8_t t3tcID         = 0xAA; // Teensy 3.0 1-wire slave with MAX31855 K-type Thermocouple chip
+const uint8_t max31850ID     = 0x3B; // MAX31850 K-type Thermocouple chip
 const uint8_t ds2762ID       = 0x30; // Maxim 2762 digital k-type thermocouple
 const uint8_t ds18b20ID      = 0x28; // Maxim DS18B20 digital Thermometer device
 const uint8_t ds2406ID       = 0x12; // Maxim DS2406+ digital switch
@@ -655,6 +657,7 @@ Adafruit_RGBLCDShield *lcd[] = { &LCD0, &LCD1, &LCD2, &LCD3, &LCD4, &LCD5, &LCD6
 
 uint8_t const lcdChars = 20;
 uint8_t const lcdRows  = 4;
+uint8_t const numLCDs  = 8;
 
 char lcdStr[lcdChars + 1];
 char versionBuf[lcdChars + 1];
@@ -663,7 +666,7 @@ char versionBuf[lcdChars + 1];
 
 void setup()
 {
-//  int x;
+  int x;
   Wire.begin();
   Serial.begin(baudRate);
   
@@ -681,20 +684,23 @@ void setup()
   Serial.println(UDP_TX_PACKET_MAX_SIZE);
   
 
-  lcd[7]->begin(lcdChars, lcdRows);
-  lcd[7]->clear();
-  lcd[7]->home();
-  lcd[7]->print(F("Serial Debug = "));
-  lcd[7]->print(baudRate);
-  lcd[7]->setCursor(0, 1);
-  lcd[7]->print(F("BUFFER_LENGTH = "));
-  lcd[7]->print(BUFFER_LENGTH);
-  lcd[7]->setCursor(0, 2);
-  lcd[7]->print(F("UDP_PACKET_MAX_SIZE"));
-  lcd[7]->setCursor(0, 3);
-  lcd[7]->print(F("        "));
-  lcd[7]->print(UDP_TX_PACKET_MAX_SIZE);
-  lcd[7]->print(F("        "));
+  for(x = 0; x < numLCDs; x++)
+  {
+    lcd[x]->begin(lcdChars, lcdRows);
+    lcd[x]->clear();
+    lcd[x]->home();
+    lcd[x]->print(F("Serial Debug = "));
+    lcd[x]->print(baudRate);
+    lcd[x]->setCursor(0, 1);
+    lcd[x]->print(F("BUFFER_LENGTH = "));
+    lcd[x]->print(BUFFER_LENGTH);
+    lcd[x]->setCursor(0, 2);
+    lcd[x]->print(F("UDP_PACKET_MAX_SIZE"));
+    lcd[x]->setCursor(0, 3);
+    lcd[x]->print(F("        "));
+    lcd[x]->print(UDP_TX_PACKET_MAX_SIZE);
+    lcd[x]->print(F("        "));
+  }
 
   delay(3000);
 
@@ -726,7 +732,6 @@ void setup()
     }
   }
 
-  lcd[7]->begin(lcdChars, lcdRows);
   lcd[7]->clear();
   lcd[7]->home();
   
@@ -844,35 +849,24 @@ void setup()
   EthernetBonjour.run();
 
 // send startup data to status LCD (I2C address 0x27) if available  
-  lcd[0]->begin(lcdChars, lcdRows);
-  lcd[0]->clear();
-  lcd[1]->begin(lcdChars, lcdRows);
-  lcd[1]->clear();
-  lcd[2]->begin(lcdChars, lcdRows);
-  lcd[2]->clear();
-  lcd[3]->begin(lcdChars, lcdRows);
-  lcd[3]->clear();
-  lcd[4]->begin(lcdChars, lcdRows);
-  lcd[4]->clear();
-  lcd[5]->begin(lcdChars, lcdRows);
-  lcd[5]->clear();
-  lcd[6]->begin(lcdChars, lcdRows);
-  lcd[6]->clear();
-  lcd[7]->clear();
-  lcd[7]->home();
-  lcdCenterStr((char *) bonjourNameBuf);
-  lcd[7]->print(lcdStr);
-  lcd[7]->setCursor(0, 1);
-  sprintf(versionBuf, "%s%s", teensyType, versionStrNumber);
-  lcdCenterStr((char *) versionBuf);
-  lcd[7]->print(lcdStr);
-  lcd[7]->setCursor(0, 2);
-  lcdCenterStr("My IP address is:");
-  lcd[7]->print(lcdStr);
-  lcd[7]->setCursor(0, 3);
-  lcd[7]->print(F("   "));
-  lcd[7]->print(Ethernet.localIP());
-  lcd[7]->print(F("   "));
+  for(x = 0; x < numLCDs; x++)
+  {
+    lcd[x]->clear();
+    lcd[x]->home();
+    lcdCenterStr((char *) bonjourNameBuf);
+    lcd[x]->print(lcdStr);
+    lcd[x]->setCursor(0, 1);
+    sprintf(versionBuf, "%s%s", teensyType, versionStrNumber);
+    lcdCenterStr((char *) versionBuf);
+    lcd[x]->print(lcdStr);
+    lcd[x]->setCursor(0, 2);
+    lcdCenterStr("My IP address is:");
+    lcd[x]->print(lcdStr);
+    lcd[x]->setCursor(0, 3);
+    lcd[x]->print(F("   "));
+    lcd[x]->print(Ethernet.localIP());
+    lcd[x]->print(F("   "));
+  }
 
   timer = millis();
   timer2 = millis();
@@ -1569,6 +1563,7 @@ void udpProcess()
         {
           case ds18b20ID:
           case t3tcID:
+          case max31850ID:
           case ds2762ID:
           {
             rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) chip[x].chipStatus);
@@ -1634,6 +1629,7 @@ void udpProcess()
         {
           case ds18b20ID:
           case ds2762ID:
+          case max31850ID:
           case t3tcID:
           {
             rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) chip[x].chipStatus);
@@ -1689,6 +1685,7 @@ void udpProcess()
           }
 
           case ds2762ID:
+          case max31850ID:
           {
             rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","K");
             break;
@@ -3134,6 +3131,7 @@ void addChipStatus(int x)
     case ds18b20ID:
     case ds2762ID:
     case t3tcID:
+    case max31850ID:
     {
       rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%d", (int16_t) chip[x].chipStatus);
       break;
@@ -3263,6 +3261,7 @@ void updateChipStatus(int x)
     
     case ds18b20ID:
     case t3tcID:
+    case max31850ID:
     {
       if(chip[x].tempTimer == 0)
       {
@@ -3301,21 +3300,21 @@ void updateChipStatus(int x)
           break; // CRC invalid, try later
         }
       // convert the data to actual temperature
-        unsigned int raw = (chipBuffer[1] << 8) | chipBuffer[0];
+        int raw = (chipBuffer[1] << 8) | chipBuffer[0];
         if( showCelsius == TRUE)
         {
           if(chip[x].chipAddr[0] == 0xAA)
           {
             chip[x].chipStatus = raw;
           }else{
-            chip[x].chipStatus = (int) ((float)raw / 16.0);
+            chip[x].chipStatus = (int16_t) ((float)raw / 16.0);
           }
         }else{
           if(chip[x].chipAddr[0] == 0xAA)
           {
-            chip[x].chipStatus = (int) ((((float)raw) * 1.8) + 32.0) ;
+            chip[x].chipStatus = (int16_t) ((((float)raw) * 1.8) + 32.0) ;
           }else{
-            chip[x].chipStatus = (int) ((((float)raw / 16.0) * 1.8) + 32.0);
+            chip[x].chipStatus = (int16_t) ((((float)raw / 16.0) * 1.8) + 32.0);
           }
         }
         chip[x].tempTimer = 0;
@@ -3445,7 +3444,18 @@ void updateActions(uint8_t x)
       {
         lcd[LCDx]->print(F(" "));
       }
-      tempStrCnt = sprintf( tempStr, "%d", action[x].tcPtr->chipStatus);
+      tempStrCnt = sprintf( tempStr, "%d", (int16_t) action[x].tempPtr->chipStatus);
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("tempStrCnt for action["));
+        Serial.print(x);
+        Serial.print(F("]tempPtr.->chipStatus"));
+        Serial.print(F(" is "));
+        Serial.print(tempStrCnt);
+        Serial.print(F(" and the chipStatus is "));
+        Serial.println((int16_t) action[x].tempPtr->chipStatus);
+     }
+
       switch(tempStrCnt)
       {
         case 1:
@@ -3464,18 +3474,37 @@ void updateActions(uint8_t x)
             break;
           }
       }
-      lcd[LCDx]->print(action[x].tempPtr->chipStatus);
+      lcd[LCDx]->print((int16_t) action[x].tempPtr->chipStatus);
       lcd[LCDx]->setCursor(0, 2);
-      tempStrCnt = strlen(action[x].tcPtr->chipName);
+      if(action[x].tcPtr != NULL)
+      {
+        tempStrCnt = strlen(action[x].tcPtr->chipName);
+      }else{
+        tempStrCnt= strlen("NOT USED");
+      }
       if(setDebug & lcdDebug)
       {
-        Serial.print(F("tempStrCnt for "));
-        Serial.print(action[x].tcPtr->chipName);
-        Serial.print(F(" is "));
-        Serial.println(tempStrCnt);
+        if(action[x].tcPtr != NULL)
+        {
+          Serial.print(F("tempStrCnt for "));
+          Serial.print(action[x].tcPtr->chipName);
+          Serial.print(F(" is "));
+          Serial.println(tempStrCnt);
+        }else{
+          Serial.print(F("action["));
+          Serial.print(x);
+          Serial.println(F("].tcPtr->chipName is not used"));
+        }
       }
-      lcd[LCDx]->print(action[x].tcPtr->chipName);
-      lcd[LCDx]->setCursor(tempStrCnt - 1, 2);
+      
+      if(action[x].tcPtr != NULL)
+      {
+        lcd[LCDx]->print(action[x].tcPtr->chipName);
+      }else{
+        lcd[LCDx]->print(F("NOT USED"));
+      }
+
+      lcd[LCDx]->setCursor(tempStrCnt, 2);
       for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
       {
         lcd[LCDx]->print(F(" "));
@@ -3489,16 +3518,33 @@ void updateActions(uint8_t x)
       }
       
       lcd[LCDx]->setCursor(0, 3);
-      tempStrCnt = strlen(action[x].thPtr->chipName);
+      if(action[x].thPtr != NULL)
+      {
+        tempStrCnt = strlen(action[x].thPtr->chipName);
+      }else{
+        tempStrCnt= strlen("NOT USED");
+      }
       if(setDebug & lcdDebug)
       {
-        Serial.print(F("tempStrCnt for "));
-        Serial.print(action[x].thPtr->chipName);
-        Serial.print(F(" is "));
-        Serial.println(tempStrCnt);
+        if(action[x].thPtr != NULL)
+        {
+          Serial.print(F("tempStrCnt for "));
+          Serial.print(action[x].thPtr->chipName);
+          Serial.print(F(" is "));
+          Serial.println(tempStrCnt);
+        }else{
+          Serial.print(F("action["));
+          Serial.print(x);
+          Serial.println(F("].thPtr->chipName is not used"));
+        }
       }
-      lcd[LCDx]->print(action[x].thPtr->chipName);
-      lcd[LCDx]->setCursor(tempStrCnt - 1, 3);
+      if(action[x].thPtr != NULL)
+      {
+        lcd[LCDx]->print(action[x].thPtr->chipName);
+      }else{
+        lcd[LCDx]->print(F("NOT USED"));
+      }
+      lcd[LCDx]->setCursor(tempStrCnt, 3);
       for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
       {
         lcd[LCDx]->print(F(" "));
