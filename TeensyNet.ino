@@ -3469,7 +3469,7 @@ void updateActions(uint8_t x)
       }
       lcd[LCDx]->print(action[x].tempPtr->chipName);
       lcd[LCDx]->setCursor(tempStrCnt, 1);
-      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
+      for( y = (tempStrCnt); y < (lcdChars - 5); y++ )
       {
         lcd[LCDx]->print(F(" "));
       }
@@ -3489,15 +3489,20 @@ void updateActions(uint8_t x)
       {
         case 1:
           {
-            lcd[LCDx]->print(F("   "));            
+            lcd[LCDx]->print(F("    "));            
             break;
           }
         case 2:
           {
-            lcd[LCDx]->print(F("  "));            
+            lcd[LCDx]->print(F("   "));            
             break;
           }
         case 3:
+          {
+            lcd[LCDx]->print(F("  "));            
+            break;
+          }
+        case 4:
           {
             lcd[LCDx]->print(F(" "));            
             break;
