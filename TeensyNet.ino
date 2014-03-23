@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.29
-Last Modified 03/07/2014
+Version 0.0.30
+Last Modified 03/23/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -125,8 +125,8 @@ const char* versionStrName   = "TeensyNet 3.1";
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrNumber = "V-0.0.29";
-const char* versionStrDate   = "03/07/2014";
+const char* versionStrNumber = "V-0.0.30";
+const char* versionStrDate   = "03/23/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -2615,6 +2615,8 @@ void udpProcess()
     
     case updateChipName: // "S"
     {
+      uint8_t cnCnt;
+      
       if(setDebug & chipNameDebug)
       {
         Serial.println(F("updateChipName Enter"));
@@ -2628,7 +2630,20 @@ void udpProcess()
       asciiArrayToHexArray(chipNameAddr, addrDelim, addrVal);
       chipAddrCnt = matchChipAddress(addrVal);
       
-      strcpy(chip[chipAddrCnt].chipName, chipNameStr);
+      for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)  // clear the name array
+      {
+        chip[chipAddrCnt].chipName[cnCnt] = 0x00;
+      }
+      
+      strcpy(chip[chipAddrCnt].chipName, chipNameStr); //copy the name array
+
+      for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
+      {
+        if(chip[chipAddrCnt].chipName[cnCnt] < 0x30 || chip[chipAddrCnt].chipName[cnCnt] > 0x7A)
+        {
+          chip[chipAddrCnt].chipName[cnCnt] = 0x00; //remove non-ascii characters
+        }
+      }
 
       if(setDebug & chipNameDebug)
       {
@@ -2636,6 +2651,20 @@ void udpProcess()
         Serial.print(chipAddrCnt);
         Serial.print(F("].chipName = "));
         Serial.println(chip[chipAddrCnt].chipName);
+        for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
+        {
+          Serial.print(F("0x"));
+          if(chip[chipAddrCnt].chipName[cnCnt] < 0x0f)
+          {
+            Serial.print(F("0"));
+          }
+          Serial.print(chip[chipAddrCnt].chipName[cnCnt], HEX);
+          if(cnCnt < chipNameSize - 1)
+          {
+            Serial.print(F(", "));
+          }
+        }
+        Serial.println();
       }
       
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Name Updated");
@@ -3439,7 +3468,7 @@ void updateActions(uint8_t x)
         Serial.println(tempStrCnt);
       }
       lcd[LCDx]->print(action[x].tempPtr->chipName);
-      lcd[LCDx]->setCursor(tempStrCnt - 1, 1);
+      lcd[LCDx]->setCursor(tempStrCnt, 1);
       for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
       {
         lcd[LCDx]->print(F(" "));
