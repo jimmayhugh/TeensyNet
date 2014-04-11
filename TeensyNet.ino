@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.30
-Last Modified 03/23/2014
+Version 0.0.32
+Last Modified 04/10/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -110,6 +110,7 @@ with
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 #include "I2CEEPROMAnything.h"
+#include "TeensyNet.h" // function prototype list
 
 /*
   General Setup
@@ -125,8 +126,8 @@ const char* versionStrName   = "TeensyNet 3.1";
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrNumber = "V-0.0.30";
-const char* versionStrDate   = "03/23/2014";
+const char* versionStrNumber = "V-0.0.32";
+const char* versionStrDate   = "04/10/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -231,6 +232,7 @@ bool showCelsius = FALSE;
 uint16_t packetSize;
 
 uint32_t timer, timer2, startTime, endTime;
+elapsedMillis udpTimer;
 const uint32_t updateTime = 250;
 const uint32_t ramUpdateTime = 10000;
 const uint32_t ds2762UpdateTime = 250;
@@ -870,6 +872,7 @@ void setup()
 
   timer = millis();
   timer2 = millis();
+  udpTimer = 0;
   
   action[0].lcdMillis = millis();
   action[1].lcdMillis = millis();
@@ -960,6 +963,11 @@ void loop()
   pidCnt++;
   if(pidCnt >= maxPIDs){pidCnt = 0;}
 
+  if(udpTimer >= (1000 * 60 * 60 * 10))
+  {
+    MasterStop();
+    softReset();
+  }
 }
 
 void pidSetup(void)
@@ -1333,7 +1341,7 @@ void updatePIDs(uint8_t pidCnt)
   }
 }
 
-void findChips()
+void findChips(void)
 {
  int cntx = 0, cmpCnt, cmpArrayCnt, dupArray = 0, cnty;
 
@@ -1496,7 +1504,7 @@ void sendUDPpacket(void)
   }  
 }
 
-void udpProcess()
+void udpProcess(void)
 {
   int x, ssBufOffset, pidArray, /*pidSection,*/ pidEnabledVal, pidDirectionVal;
   char *result = NULL, *addrResult = NULL/*, pidEnd = NULL*/;
@@ -2912,6 +2920,7 @@ void udpProcess()
   PacketBuffer[0]=0x00;
   cnt = 0;
   serialMessageReady = FALSE;
+  udpTimer = 0; // reset udp watchdog
 }
 
 void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
@@ -3654,7 +3663,7 @@ void MasterStop(void)
   }
 }
 
-void softReset()
+void softReset(void)
 {
   // 0000101111110100000000000000100
   // Assert [2]SYSRESETREQ
