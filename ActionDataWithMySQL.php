@@ -88,9 +88,9 @@
   }else{
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/index.php\">
+      <meta http-equiv=\"refresh\" content=\"1;url=index.php\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/index.php\"
+          window.location.href = \"index.php\"
       </script>";
   }
 
@@ -186,9 +186,9 @@
     
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\">
+      <meta http-equiv=\"refresh\" content=\"1;url=ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\"
+          window.location.href = \"ActionStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\"
       </script>";
 
   }else{ // entry from Action Status.php

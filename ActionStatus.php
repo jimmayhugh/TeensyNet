@@ -54,9 +54,9 @@
   }else{
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/Test/index.php\">
+      <meta http-equiv=\"refresh\" content=\"1;url=index.php\">
       <script type=\"text/javascript\">
-          window.location.href = \"http://localhost/index.php\"
+          window.location.href = \"index.php\"
       </script>";
   }
   echo $headStr;
