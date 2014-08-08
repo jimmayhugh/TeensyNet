@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.32
-Last Modified 04/10/2014
+Version 0.0.35
+Last Modified 05/11/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -36,7 +36,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *********************/
 
 /*********************
-This code requires several changes in several libraries to work properly. This is due primarily to the limite amount of
+This code requires several changes in several libraries to work properly. This is due primarily to the limited amount of
 RAM that's available in the Arduino series versus the Teensy.
 
 ------------------------------------------
@@ -126,8 +126,8 @@ const char* versionStrName   = "TeensyNet 3.1";
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrNumber = "V-0.0.32";
-const char* versionStrDate   = "04/10/2014";
+const char* versionStrNumber = "V-0.0.35";
+const char* versionStrDate   = "05/11/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -155,12 +155,14 @@ const uint32_t lcdDebug        = 0x00000800; //   2048
 const uint32_t crcDebug        = 0x00001000; //   4096
 const uint32_t ds2762Debug     = 0x00002000; //   8192
 const uint32_t bonjourDebug    = 0x00004000; //  16384
+const uint32_t ethDebug        = 0x00008000; //  32768
+const uint32_t udpTimerDebug   = 0x00010000; //  65532
 
 uint32_t setDebug = 0x00000000;
 
-const uint8_t resetWIZ5200pin  = 9;
 const uint8_t chipStartPin     = 12;
-const uint8_t resetWIZ5100pin  = 23;
+const uint8_t hwMasterStopPin  = 22;
+const uint8_t chipResetPin     = 23;
 
 // define serial commands
 
@@ -236,6 +238,7 @@ elapsedMillis udpTimer;
 const uint32_t updateTime = 250;
 const uint32_t ramUpdateTime = 10000;
 const uint32_t ds2762UpdateTime = 250;
+const uint32_t udpTimerMax = (1000 * 60 * 60); // no UDP traffic for 1 hour results in a reset
 
 // OneWire Setup;
 const uint8_t oneWireAddress = 2; // OneWire Bus Address - use pin 2 for TeensyNet board
@@ -588,20 +591,22 @@ PID *pidArrayPtr[] = {&PID0, &PID1, &PID2, &PID3};
 
 
 //I2CEEPROM Stuff
-const uint32_t   I2CEEPROMsize         = 0xFFFF;   // MicroChip 24LC512
-const uint16_t   I2CEEPROMidAddr       = 0x05;    // ID address to verify a previous I2CEEPROM write
-const uint16_t   I2CEEPROMccAddr       = 0x10;    // number of chips found during findchips()
-const uint16_t   I2CEEPROMbjAddr       = 0x50;    // start of Bonjour name buffer
-const uint16_t   I2CEEPROMchipAddr     = 0x1000;  // start address of chip structures
-const uint16_t   I2CEEPROMactionAddr   = 0x5000;  // start address of action structures
-const uint16_t   I2CEEPROMpidAddr      = 0x9000;  // start address of chip structures
-const uint8_t    I2CEEPROMidVal        = 0x55;    // Shows that an EEPROM update has occurred 
-const uint8_t    I2C0x50               = 0x50;    // device address at 0x50
-const uint8_t    I2C0x51               = 0x51;    // device address at 0x51
-const uint8_t    pageSize              = 128;     // MicroChip 24LC512 buffer page
-bool             i2cEepromReady        = FALSE;
-uint16_t         i2cEeResult16;
-uint8_t          i2cEeResult;
+const uint32_t    I2CEEPROMsize         = 0xFFFF;  // MicroChip 24LC512
+const uint16_t    I2CEEPROMidAddr       = 0x0005;  // ID address to verify a previous I2CEEPROM write
+const uint16_t    I2CEEPROMccAddr       = 0x0010;  // number of chips found during findchips()
+const uint16_t    I2CEEPROMbjAddr       = 0x0050;  // start of Bonjour name buffer
+const uint16_t    I2CEEPROMipAddr       = 0x0500;   // start of IP address storage
+const uint16_t    I2CEEPROMchipAddr     = 0x1000;  // start address of chip structures
+const uint16_t    I2CEEPROMactionAddr   = 0x5000;  // start address of action structures
+const uint16_t    I2CEEPROMpidAddr      = 0x9000;  // start address of chip structures
+const uint8_t     I2CEEPROMidVal        = 0x55;    // Shows that an EEPROM update has occurred 
+const uint8_t     I2C0x50               = 0x50;    // device address at 0x50
+const uint8_t     I2C0x51               = 0x51;    // device address at 0x51
+const uint8_t     pageSize              = 128;     // MicroChip 24LC512 buffer page
+bool              i2cEepromReady        = FALSE;
+uint16_t          i2cEeResult16;
+uint8_t           i2cEeResult;
+uint8_t           i2cIPResult[4] = {0,0,0,0};
 
 // Ethernet Stuff
 
@@ -662,7 +667,7 @@ uint8_t const lcdRows  = 4;
 uint8_t const numLCDs  = 8;
 
 char lcdStr[lcdChars + 1];
-char versionBuf[lcdChars + 1];
+char lcdStrBuf[lcdChars + 1];
 
 // End LCD Stuff
 
@@ -674,6 +679,8 @@ void setup()
   
   pinMode(chipStartPin, OUTPUT);
   digitalWrite(chipStartPin, HIGH); // sync pin for DSO
+  pinMode(hwMasterStopPin, INPUT_PULLUP); // set to monitor Master Stop switch
+  pinMode(chipResetPin, INPUT_PULLUP); // set to monitor Reset switch
     
   delay(3000);
   
@@ -858,13 +865,13 @@ void setup()
     lcdCenterStr((char *) bonjourNameBuf);
     lcd[x]->print(lcdStr);
     lcd[x]->setCursor(0, 1);
-    sprintf(versionBuf, "%s%s", teensyType, versionStrNumber);
-    lcdCenterStr((char *) versionBuf);
+    sprintf(lcdStrBuf, "%s%s", teensyType, versionStrNumber);
+    lcdCenterStr((char *) lcdStrBuf);
     lcd[x]->print(lcdStr);
     lcd[x]->setCursor(0, 2);
-    lcdCenterStr("My IP address is:");
-    lcd[x]->print(lcdStr);
-    lcd[x]->setCursor(0, 3);
+//    lcdCenterStr("My IP address is:");
+//    lcd[x]->print(lcdStr);
+//    lcd[x]->setCursor(0, 3);
     lcd[x]->print(F("   "));
     lcd[x]->print(Ethernet.localIP());
     lcd[x]->print(F("   "));
@@ -933,6 +940,13 @@ void loop()
     {
       Serial.println(F("EthernetBonjour.run()"));
     }
+    
+    if(setDebug & ethDebug) // display Process Command Letter
+    {
+      lcd[7]->setCursor(0, 3);
+      lcd[7]->print(F("EthernetBonjour.run "));
+    }
+
     runBonjour = runBonjour - runBonjourTimeout;
     EthernetBonjour.run();
   }
@@ -963,11 +977,21 @@ void loop()
   pidCnt++;
   if(pidCnt >= maxPIDs){pidCnt = 0;}
 
-  if(udpTimer >= (1000 * 60 * 60 * 10))
+  if(setDebug & udpTimerDebug) // Time since Last UDP command
+  {
+    sprintf(lcdStrBuf, "%ld", (uint32_t) udpTimer);
+    lcdCenterStr((char *) lcdStrBuf);
+    lcd[7]->setCursor(0, 3);
+    lcd[7]->print(lcdStr);
+  }
+
+  if(udpTimer >= udpTimerMax) // Reset if no UDP activity for more than 1 hour
   {
     MasterStop();
     softReset();
   }
+  checkMasterStop();
+  checkForReset();
 }
 
 void pidSetup(void)
@@ -1515,9 +1539,18 @@ void udpProcess(void)
   uint8_t addrVal[chipAddrSize],/* addrMatchCnt,*/ chipAddrCnt;
 
   rBuffCnt = 0;
+
+  if(setDebug & ethDebug) // display Process Command Letter
+  {
+    lcd[7]->setCursor(0, 3);
+    lcd[7]->print(F("udpProcess - "));
+    lcd[7]->print(PacketBuffer[0]);
+    lcd[7]->print(F("      "));
+  }
+
   switch(PacketBuffer[0])
   {
-    
+
     case getMaxChips: // "1"
     {
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", maxChips);
@@ -3891,4 +3924,48 @@ void lcdCenterStr(char *str)
     }
   }
 }
+
+void checkMasterStop(void)
+{
+  if(setDebug & resetDebug)
+  { 
+    Serial.println(F("Checking Master Stop"));
+  }
+  elapsedMillis MSTimer = 0;
+  while(digitalRead(hwMasterStopPin) == LOW)
+  {
+    if(MSTimer >= 1000)
+    {
+      if(setDebug & resetDebug)
+      { 
+        Serial.println(F("Executing Master Stop"));
+      }
+      MasterStop();
+      break;
+    }
+  }
+}
+
+void checkForReset(void)
+{
+  if(setDebug & resetDebug)
+  { 
+    Serial.println(F("Checking Reset"));
+  }
+  elapsedMillis resetTimer = 0;
+  while(digitalRead(chipResetPin) == LOW)
+  {
+    if(resetTimer >= 1000)
+    {
+      if(setDebug & resetDebug)
+      { 
+        Serial.println(F("Executing Reset"));
+      }
+      MasterStop();
+      softReset();
+      break;
+    }
+  }
+}
+
 
