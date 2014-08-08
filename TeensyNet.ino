@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.35
-Last Modified 05/11/2014
+Version 0.0.36
+Last Modified 08/05/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -126,8 +126,8 @@ const char* versionStrName   = "TeensyNet 3.1";
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrNumber = "V-0.0.35";
-const char* versionStrDate   = "05/11/2014";
+const char* versionStrNumber = "V-0.0.36";
+const char* versionStrDate   = "08/05/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -704,11 +704,9 @@ void setup()
     lcd[x]->print(F("BUFFER_LENGTH = "));
     lcd[x]->print(BUFFER_LENGTH);
     lcd[x]->setCursor(0, 2);
-    lcd[x]->print(F("UDP_PACKET_MAX_SIZE"));
-    lcd[x]->setCursor(0, 3);
-    lcd[x]->print(F("        "));
-    lcd[x]->print(UDP_TX_PACKET_MAX_SIZE);
-    lcd[x]->print(F("        "));
+    sprintf(lcdStrBuf, "%s%s", teensyType, versionStrNumber);
+    lcdCenterStr((char *) lcdStrBuf);
+    lcd[x]->print(lcdStr);
   }
 
   delay(3000);
@@ -2954,6 +2952,7 @@ void udpProcess(void)
   cnt = 0;
   serialMessageReady = FALSE;
   udpTimer = 0; // reset udp watchdog
+  KickDog(); // reset Hardware Watchdog
 }
 
 void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
@@ -3968,4 +3967,26 @@ void checkForReset(void)
   }
 }
 
+void KickDog(void)
+{
+  Serial.println("Kicking the dog!");
+  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+  noInterrupts();
+  WDOG_REFRESH = 0xA602;
+  WDOG_REFRESH = 0xB480;
+  interrupts();
+}
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+  void startup_early_hook() {
+    WDOG_TOVALL = 0x93E0; // The next 2 lines sets the time-out value. (5 Minutes) This is the value that the watchdog timer compare itself to.
+    WDOG_TOVALH = 0x0004;
+    WDOG_STCTRLH = (WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN | WDOG_STCTRLH_WAITEN | WDOG_STCTRLH_STOPEN); // Enable WDG
+    //WDOG_PRESC = 0; // prescaler 
+  }
+#ifdef __cplusplus
+}
+#endif
