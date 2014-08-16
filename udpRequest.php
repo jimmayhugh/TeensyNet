@@ -39,6 +39,7 @@ $off = "0";
 $tooHot =  "H";
 $tooCold = "C";
 $socBufSize = 2048;
+$udpUpdate = 2000;
 
 $dummyAddr="0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00";
 
@@ -84,7 +85,10 @@ $socBufSize = 2048;
     socket_sendto($socket, $in , strlen($in) , 0 , $service_port , $port_address);
     fwrite($fr, "command sent: ".$in);
 
-    socket_recvfrom($socket, $result, $socBufSize, MSG_WAITALL, $service_port, $port_address);
+    if(socket_recvfrom($socket, $result, $socBufSize, MSG_WAITALL, $service_port, $port_address) === -1)
+    {
+    	fwrite($fr, socket_strerror(socket_last_error($socket)));
+    }
       
     $resultStr = "";
       
@@ -129,7 +133,12 @@ $socBufSize = 2048;
     die();
   }
 
-  fwrite($fr, "packet received:\n".$resultStr);
+	if($resultStr === "")
+	{
+  	fwrite($fr, "NO Packet Received:\n");
+	}else{
+  	fwrite($fr, "packet received:\n".$resultStr);
+  }
   fclose($fr);
 
   socket_close($socket);

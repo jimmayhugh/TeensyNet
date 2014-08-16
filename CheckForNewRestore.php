@@ -36,7 +36,7 @@
           $(\"#container\").load(\"updateStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\");
           var refreshId = setInterval(function() {
             $(\"#container\").load(\"updateStatus.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\");
-            }, 1000);
+            }, $udpUpdate);
           $.ajaxSetup({ cache: false });
         });
     </script>";

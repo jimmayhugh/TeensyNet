@@ -39,16 +39,16 @@
           $(\"#container\").load(\"updatePidStatusWithMySQL.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\");
          var refreshId = setInterval(function() {
             $(\"#container\").load(\"updatePidStatusWithMySQL.php?netID=$netID&service_port=$service_port&port_address=$port_address&netName=$netName\");
-         }, 1000);
+         }, $udpUpdate);
          $.ajaxSetup({ cache: false });
       });
       </script>";
   }else{
     $headStr = "
       <meta charset=\"UTF-8\">
-      <meta http-equiv=\"refresh\" content=\"1;url=index.php\">
+      <meta http-equiv=\"refresh\" content=\"1;url=http://localhost/Test/index.php\">
       <script type=\"text/javascript\">
-          window.location.href = \"index.php\"
+          window.location.href = \"http://localhost/Test/index.php\"
       </script>";
   }
   echo $headStr;
