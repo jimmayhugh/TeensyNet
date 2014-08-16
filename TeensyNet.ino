@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.36
-Last Modified 08/05/2014
+Version 0.0.37
+Last Modified 08/10/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -126,8 +126,8 @@ const char* versionStrName   = "TeensyNet 3.1";
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrNumber = "V-0.0.36";
-const char* versionStrDate   = "08/05/2014";
+const char* versionStrNumber = "V-0.0.37";
+const char* versionStrDate   = "08/10/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -632,7 +632,7 @@ IPAddress ip(192, 168, 1, 51);
 EthernetUDP Udp;
 
 elapsedMillis runBonjour;
-const uint16_t runBonjourTimeout = 5000;
+const uint32_t runBonjourTimeout = (1000 *5);
 // char IPaddrBuf[17];
 char bonjourBuf[35];
 char bonjourNameBuf[chipNameSize];
@@ -945,7 +945,7 @@ void loop()
       lcd[7]->print(F("EthernetBonjour.run "));
     }
 
-    runBonjour = runBonjour - runBonjourTimeout;
+    runBonjour = 0;
     EthernetBonjour.run();
   }
   
@@ -975,12 +975,15 @@ void loop()
   pidCnt++;
   if(pidCnt >= maxPIDs){pidCnt = 0;}
 
-  if(setDebug & udpTimerDebug) // Time since Last UDP command
+  if(setDebug & udpTimerDebug && udpTimer > 2000) // Time since Last UDP command
   {
+    Serial.print(F("Time Since Last UDP Command - "));
     sprintf(lcdStrBuf, "%ld", (uint32_t) udpTimer);
     lcdCenterStr((char *) lcdStrBuf);
     lcd[7]->setCursor(0, 3);
     lcd[7]->print(lcdStr);
+    Serial.print(lcdStrBuf);
+    Serial.println(F(" milliseconds"));
   }
 
   if(udpTimer >= udpTimerMax) // Reset if no UDP activity for more than 1 hour
