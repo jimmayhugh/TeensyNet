@@ -41,9 +41,9 @@
   $aaLCD      = 15;
   
   $switchOptionStr = "";
-  $escapedTempName="";
-  $escapedTcName="";
-  $escapedThName="";
+  $escapedTempName = "";
+  $escapedTcName = "";
+  $escapedThName = "";
 
   $lcdOptionStr="<option value=\"32\">LCD0</option>
                  <option value=\"33\">LCD1</option>
@@ -53,6 +53,8 @@
                  <option value=\"37\">LCD5</option>
                  <option value=\"38\">LCD6</option>";
   
+  $glcdActionStr = "";
+  $containerStr = "";
   
   if( (isset($_POST["netID"]) && $_POST["netID"] >= 0) )
   {
@@ -61,6 +63,7 @@
     $port_address = $_POST["port_address"];
     $netName = $_POST["netName"];
     $actionCnt = $_POST["actionCnt"];
+    $actionAddr = $_POST["actionAddr"];
   }    
   if(isset($_GET["netID"]) && $_GET["netID"] >= 0) 
   {
@@ -106,6 +109,7 @@
     $actionCnt = $_POST["actionCnt"];
     $actionEnable = $_POST["enable"];
     $lcd = $_POST["lcd"];
+    $glcd = $_POST["glcd"];
     
     $updateQuery = "SELECT * FROM action WHERE id='".$actionCnt."' AND netID='".$netID."'";
     $updateQueryResult = mysqli_query($link, $updateQuery);
@@ -152,6 +156,9 @@
       $killSwitch = udpRequest($service_port, $port_address, $in);
     }
 
+    $glcdArray = unserialize(urldecode($glcd));
+    $in = $setGLCD." ".$glcdArray[0]." 3 ".$glcdArray[1]." ".$glcdArray[2]."\n";
+    $out = udpRequest($service_port, $port_address, $in);
     $in = $saveToEEPROM."\n";
     $out = udpRequest($service_port, $port_address, $in);
     sleep(2);
@@ -227,6 +234,36 @@
       }
     }
     
+    $in = "$getGLCDcnt\n";
+    $out = udpRequest($service_port, $port_address, $in);
+    $glcdCnt = $out;
+//    echo "$glcdCnt <br />";
+    for($glcd = 0; $glcd < $glcdCnt; $glcd++)
+    {
+      $in = "$getGLCDstatus$glcd\n";
+//      echo "$in <br />";
+      $out = udpRequest($service_port, $port_address, $in);
+//      echo "$out <br />";
+      $glcdArray = explode(",", $out);
+      for($glcdActionCnt = 0; $glcdActionCnt < 4; $glcdActionCnt++)
+      {
+        $glcdVals[0] = $glcd;
+        $glcdVals[1] = $glcdActionCnt;
+        $glcdVals[2] = $actionAddr;
+//        $glcdVals[2] = $glcdArray[$glcdActionCnt+2];
+//        $glcdVals[3] = $glcdArray[3];
+//        $glcdVals[4] = $glcdArray[4];
+//        $glcdVals[5] = $glcdArray[5];
+        $glcdActionStr .= "<option value=\"";
+        $glcdActionStr .= urlencode(serialize($glcdVals));
+        if($glcdArray[0] === "NULL")
+        {
+          $glcdActionStr .= "\">GLCD".$glcd."-".$glcdActionCnt."</option>\n";
+        }else{
+          $glcdActionStr .= "\">".$glcdArray[0]."-".$glcdActionCnt."</option>\n";
+        }
+      }
+    }
     $in = $getActionArray.$actionCnt."\n";
     $out = udpRequest($service_port, $port_address, $in);
     $actionArray = explode(" ", $out);
@@ -280,8 +317,11 @@
                         <input type=\"radio\" name=\"lcd\" value=\"0\" checked>Disable</input>";
     }
 */
+    $containerStr .= "      </td></tr><tr><td align=\"center\" colspan=\"3\">";
+    $containerStr .= "         Assign 1-Wire GLCD: <select type=\"text\" name=\"glcd\">\n";
+    $containerStr .= "         <option value=\"NULL\">NONE</option>\n".$glcdActionStr."</select>";
     $containerStr .= "      </td></tr>";
-    
+        
     $tempAddrArray = explode(",", $actionArray[$aaTempAddr]);
     if( ($tempAddrArray[0] === "0x30") ||
         ($tempAddrArray[0] === "0x3B") ||

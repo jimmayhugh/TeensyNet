@@ -211,6 +211,8 @@
        $bodyStr .=
         "</td><td>&nbsp;</td></tr></table>";
       }
+    $in = $getStructAddr."A".$x."\n";
+    $actionAddr = udpRequest($service_port, $port_address, $in);
     $bodyStr .= 
         "<form method=\"post\" action=\"ActionDataWithMySQL.php\">
            <input type=\"hidden\" name=\"actionCnt\" value=\"".$x."\">
@@ -218,6 +220,7 @@
            <input type=\"hidden\" name=\"port_address\" value=\"".$port_address."\">
            <input type=\"hidden\" name=\"netName\" value=\"".$netName."\">
            <input type=\"hidden\" name=\"netID\" value=\"".$netID."\">
+           <input type=\"hidden\" name=\"actionAddr\" value=\"".$actionAddr."\">
            <input type=\"submit\" value=\"MODIFY\">
          </form>";
 

@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.37
-Last Modified 08/10/2014
+Version 0.0.40
+Last Modified 09/20/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -96,7 +96,6 @@ with
 #include <PID_v1.h>
 #include <math.h>
 #include <EEPROM.h>
-//#include "EEPROMAnything.h"
 #include <OneWire.h>
 #include <errno.h>
 #include <SPI.h>
@@ -105,29 +104,30 @@ with
 #include <EthernetBonjour.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <t3mac.h>
-#include <Wire.h>
-#include <Adafruit_MCP23017.h>
-#include <Adafruit_RGBLCDShield.h>
-#include "I2CEEPROMAnything.h"
-#include "TeensyNet.h" // function prototype list
+#include <FastWire.h>
+#include <Teensy_MCP23017.h>
+#include <Teensy_RGBLCDShield.h>
+#include <I2CEEPROMAnything.h>
+#include <TeensyNetFuncProt.h> // function prototype list
+#include <TeensyDebug.h>
+#include <TeensyUDP.h>
+#include <Teensy1Wire.h>
+#include <TeensyAction.h>
+#include <TeensyPID.h>
+#include <TeensyI2CEEPROM.h>
+#include <TeensyLCDShield.h>
+#include <TeensyBonjour.h>
+#include <TeensyEthernet.h>
+#include <TeensyDS2762.h>
+#include <TeensyTestPoints.h>
+#include <TeensyVersionInfo.h>
+#include <TeensyNetGLCD.h> // TeensyGLCD structures and commands
 
 /*
   General Setup
 */
-
-#if __MK20DX128__
-const char* teensyType = "Teensy3.0 ";
-const char* versionStrName   = "TeensyNet 3.0";
-#elif __MK20DX256__
-const char* teensyType = "Teensy3.1 ";
-const char* versionStrName   = "TeensyNet 3.1";
-#else
-const char* teensyType = "UNKNOWN ";
-#endif
-
-const char* versionStrNumber = "V-0.0.37";
-const char* versionStrDate   = "08/10/2014";
 
 // Should restart Teensy 3, will also disconnect USB during restart
 
@@ -140,545 +140,31 @@ const char* versionStrDate   = "08/10/2014";
 #define WRITE_RESTART(val) ((*(volatile uint32_t *)RESTART_ADDR) = (val))
 
 
-const uint32_t resetDebug      = 0x00000001; //      1
-const uint32_t pidDebug        = 0x00000002; //      2
-const uint32_t eepromDebug     = 0x00000004; //      4
-const uint32_t chipDebug       = 0x00000008; //      8
-const uint32_t findChipDebug   = 0x00000010; //     16
-const uint32_t serialDebug     = 0x00000020; //     32
-const uint32_t udpDebug        = 0x00000040; //     64
-const uint32_t wifiDebug       = 0x00000080; //    128
-const uint32_t udpHexBuff      = 0x00000100; //    256
-const uint32_t chipNameDebug   = 0x00000200; //    512
-const uint32_t actionDebug     = 0x00000400; //   1024
-const uint32_t lcdDebug        = 0x00000800; //   2048
-const uint32_t crcDebug        = 0x00001000; //   4096
-const uint32_t ds2762Debug     = 0x00002000; //   8192
-const uint32_t bonjourDebug    = 0x00004000; //  16384
-const uint32_t ethDebug        = 0x00008000; //  32768
-const uint32_t udpTimerDebug   = 0x00010000; //  65532
 
-uint32_t setDebug = 0x00000000;
-
-const uint8_t chipStartPin     = 12;
 const uint8_t hwMasterStopPin  = 22;
 const uint8_t chipResetPin     = 23;
-
-// define serial commands
-
-const uint8_t getMaxChips        = '1';
-const uint8_t showChip           = getMaxChips + 1;    // "2"
-const uint8_t getChipCount       = showChip + 1;       // "3"
-const uint8_t getChipAddress     = getChipCount + 1;   // "4"
-const uint8_t getChipStatus      = getChipAddress + 1; // "5"
-const uint8_t setSwitchState     = getChipStatus + 1;  // "6"
-const uint8_t getAllStatus       = setSwitchState + 1; // "7"
-const uint8_t getChipType        = getAllStatus + 1;   // "8"
-const uint8_t updateBonjour      = getChipType + 1;    // "9"
-
-const uint8_t getActionArray     = 'A'; // start of new serial command list
-const uint8_t updateActionArray  = getActionArray + 1;    // "B"
-const uint8_t getActionStatus    = updateActionArray + 1; // "C"
-const uint8_t getMaxActions      = getActionStatus + 1;   // "D"
-const uint8_t setActionSwitch    = getMaxActions + 1;     // "E"
-const uint8_t saveToEEPROM       = setActionSwitch + 1;   // "F"
-const uint8_t getEEPROMstatus    = saveToEEPROM + 1;      // "G"
-const uint8_t getNewSensors      = getEEPROMstatus + 1;   // "H"
-const uint8_t masterStop         = getNewSensors + 1;     // "I"
-const uint8_t getMaxPids         = masterStop + 1;        // "J"
-const uint8_t masterPidStop      = getMaxPids + 1;        // "K"
-const uint8_t getPidStatus       = masterPidStop + 1;     // "L"
-const uint8_t updatePidArray     = getPidStatus + 1;      // "M"
-const uint8_t getPidArray        = updatePidArray + 1;    // "N"
-const uint8_t setPidArray        = getPidArray + 1;       // "O"
-const uint8_t useDebug           = setPidArray + 1;       // "P"
-const uint8_t restoreStructures  = useDebug + 1;          // "Q"
-const uint8_t shortShowChip      = restoreStructures + 1; // "R"
-const uint8_t updateChipName     = shortShowChip + 1;     // "S"
-const uint8_t showActionStatus   = updateChipName + 1;    // "T"
-const uint8_t setAction          = showActionStatus + 1;  // "U"
-
-const uint8_t displayMessage     = 'w';
-const uint8_t clearAndReset      = 'x';
-const uint8_t clearEEPROM        = 'y';
-const uint8_t versionID          = 'z';
-
-
-// end of serial commands
-
-const uint8_t softSerialError  = 'X';
-const uint8_t setSwitchON      = 'N';
-const uint8_t setSwitchOFF     = 'F';
-const uint8_t switchStatusON   = 'N';
-const uint8_t switchStatusOFF  = 'F';
-const uint8_t tooHotSwitch     = 'H';
-const uint8_t tooColdSwitch    = 'C';
-const uint8_t noChipPresent    = 0xFF;
-
-
-const long baudRate = 115200;
-
-//char PartialBuffer[UDP_TX_PACKET_MAX_SIZE]; // Partial Buffer for oversized messages
-
-char itoaBuf[20];
-uint16_t rBuffCnt = 0;
-char c;
-uint8_t cnt = 0;
-uint8_t chipSelected;
-uint8_t actionSelected;
-uint8_t setChipState;
-uint8_t *chipAddrPtr;
-bool serialMessageReady = FALSE;
-bool actionPtrMatch = FALSE;
-bool showCelsius = FALSE;
-uint16_t packetSize;
-
-uint32_t timer, timer2, startTime, endTime;
-elapsedMillis udpTimer;
-const uint32_t updateTime = 250;
-const uint32_t ramUpdateTime = 10000;
-const uint32_t ds2762UpdateTime = 250;
-const uint32_t udpTimerMax = (1000 * 60 * 60); // no UDP traffic for 1 hour results in a reset
-
-// OneWire Setup;
-const uint8_t oneWireAddress = 2; // OneWire Bus Address - use pin 2 for TeensyNet board
-const uint8_t chipAddrSize   = 8; // 64bit OneWire Address
-const uint8_t chipNameSize   = 16;
-const uint8_t ds2406MemWr    = 0x55;
-const uint8_t ds2406MemRd    = 0xaa;
-const uint8_t ds2406AddLow   = 0x07;
-const uint8_t ds2406AddHi    = 0x00;
-const uint8_t ds2406PIOAoff  = 0x3f;
-const uint8_t ds2406PIOAon   = 0x1f;
-const uint8_t ds2406End      = 0xff;
-const uint8_t t3tcID         = 0xAA; // Teensy 3.0 1-wire slave with MAX31855 K-type Thermocouple chip
-const uint8_t max31850ID     = 0x3B; // MAX31850 K-type Thermocouple chip
-const uint8_t ds2762ID       = 0x30; // Maxim 2762 digital k-type thermocouple
-const uint8_t ds18b20ID      = 0x28; // Maxim DS18B20 digital Thermometer device
-const uint8_t ds2406ID       = 0x12; // Maxim DS2406+ digital switch
-const uint8_t dsPIO_A        = 0x20;
-const uint8_t dsPIO_B        = 0x40;
-
-const uint8_t maxChips       = 36; // Maximum number of Chips
-const uint8_t maxActions     = 12; // Maximum number of Actions
+const uint8_t w5200ResetPin    = 9;
 
 OneWire  ds(oneWireAddress);
-
-// DS2762 oneWire conversion table - K-Type Thermocouple
-
-const uint16_t kNegTableCnt = 271;
-PROGMEM prog_uint16_t kNegTable[kNegTableCnt] =
-{
- /*       --0--  --1--  --2--  --3--  --4--  --5--  --6--  --7--  --8--  --9-- */
- /*   0*/     0,    39,    79,   118,   157,   197,   236,   275,   314,   353,
- /* -10*/   392,   431,   470,   508,   547,   586,   624,   663,   701,   739,
- /* -20*/   778,   816,   854,   892,   930,   968,  1006,  1043,  1081,  1119,
- /* -30*/  1156,  1194,  1231,  1268,  1305,  1343,  1380,  1417,  1453,  1490,
- /* -40*/  1527,  1564,  1600,  1637,  1673,  1709,  1745,  1782,  1818,  1854,
- /* -50*/  1889,  1925,  1961,  1996,  2032,  2067,  2103,  2138,  2173,  2208,
- /* -60*/  2243,  2278,  2312,  2347,  2382,  2416,  2450,  2485,  2519,  2553,
- /* -70*/  2587,  2620,  2654,  2688,  2721,  2755,  2788,  2821,  2854,  2887,
- /* -80*/  2920,  2953,  2986,  3018,  3050,  3083,  3115,  3147,  3179,  3211,
- /* -90*/  3243,  3274,  3306,  3337,  3368,  3400,  3431,  3462,  3492,  3523,
- /*-100*/  3554,  3584,  3614,  3645,  3675,  3705,  3734,  3764,  3794,  3823,
- /*-110*/  3852,  3882,  3911,  3939,  3968,  3997,  4025,  4054,  4082,  4110,
- /*-120*/  4138,  4166,  4194,  4221,  4249,  4276,  4303,  4330,  4357,  4384,
- /*-130*/  4411,  4437,  4463,  4490,  4516,  4542,  4567,  4593,  4618,  4644,
- /*-140*/  4669,  4694,  4719,  4744,  4768,  4793,  4817,  4841,  4865,  4889,
- /*-150*/  4913,  4936,  4960,  4983,  5006,  5029,  5052,  5074,  5097,  5119,
- /*-160*/  5141,  5163,  5185,  5207,  5228,  5250,  5271,  5292,  5313,  5333,
- /*-170*/  5354,  5374,  5395,  5415,  5435,  5454,  5474,  5493,  5512,  5531,
- /*-180*/  5550,  5569,  5588,  5606,  5624,  5642,  5660,  5678,  5695,  5713,
- /*-190*/  5730,  5747,  5763,  5780,  5797,  5813,  5829,  5845,  5861,  5876,
- /*-200*/  5891,  5907,  5922,  5936,  5951,  5965,  5980,  5994,  6007,  6021,
- /*-210*/  6035,  6048,  6061,  6074,  6087,  6099,  6111,  6123,  6135,  6147,
- /*-220*/  6158,  6170,  6181,  6192,  6202,  6213,  6223,  6233,  6243,  6252,
- /*-230*/  6262,  6271,  6280,  6289,  6297,  6306,  6314,  6322,  6329,  6337,
- /*-240*/  6344,  6351,  6358,  6364,  6370,  6377,  6382,  6388,  6393,  6399,
- /*-250*/  6404,  6408,  6413,  6417,  6421,  6425,  6429,  6432,  6435,  6438,
- /*-260*/  6411,  6444,  6446,  6448,  6450,  6452,  6453,  6455,  6456,  6457,
- /*-270*/  6458
-};
-
-const uint16_t kTableCnt = 1373;
-PROGMEM prog_uint16_t kTable[kTableCnt] =
-{
-  /*       --0--  --1--  --2--  --3--  --4--  --5--  --6--  --7--  --8--  --9-- */
-  /*0000*/     0,    39,    79,   119,   158,   198,   238,   277,   317,   357,
-  /*0010*/   397,   437,   477,   517,   557,   597,   637,   677,   718,   758,
-  /*0020*/   798,   838,   879,   919,   960,  1000,  1040,  1080,  1122,  1163,
-  /*0030*/  1203,  1244,  1284,  1326,  1366,  1407,  1448,  1489,  1530,  1570,
-  /*0040*/  1612,  1653,  1694,  1735,  1776,  1816,  1858,  1899,  1941,  1982,
-  /*0050*/  2023,  2064,  2105,  2146,  2188,  2230,  2270,  2311,  2354,  2395,
-  /*0060*/  2436,  2478,  2519,  2560,  2601,  2644,  2685,  2726,  2767,  2810,
-  /*0070*/  2850,  2892,  2934,  2976,  3016,  3059,  3100,  3141,  3184,  3225,
-  /*0080*/  3266,  3307,  3350,  3391,  3432,  3474,  3516,  3557,  3599,  3640,
-  /*0090*/  3681,  3722,  3765,  3806,  3847,  3888,  3931,  3972,  4012,  4054,
-  /*0100*/  4096,  4137,  4179,  4219,  4261,  4303,  4344,  4384,  4426,  4468,
-  /*0110*/  4509,  4549,  4591,  4633,  4674,  4714,  4756,  4796,  4838,  4878,
-  /*0120*/  4919,  4961,  5001,  5043,  5083,  5123,  5165,  5206,  5246,  5288,
-  /*0130*/  5328,  5368,  5410,  5450,  5490,  5532,  5572,  5613,  5652,  5693,
-  /*0140*/  5735,  5775,  5815,  5865,  5895,  5937,  5977,  6017,  6057,  6097,
-  /*0150*/  6137,  6179,  6219,  6259,  6299,  6339,  6379,  6419,  6459,  6500,
-  /*0160*/  6540,  6580,  6620,  6660,  6700,  6740,  6780,  6820,  6860,  6900,
-  /*0170*/  6940,  6980,  7020,  7059,  7099,  7139,  7179,  7219,  7259,  7299,
-  /*0180*/  7339,  7379,  7420,  7459,  7500,  7540,  7578,  7618,  7658,  7698,
-  /*0190*/  7738,  7778,  7819,  7859,  7899,  7939,  7979,  8019,  8058,  8099,
-  /*0200*/  8137,  8178,  8217,  8257,  8298,  8337,  8378,  8417,  8458,  8499,
-  /*0210*/  8538,  8579,  8618,  8659,  8698,  8739,  8778,  8819,  8859,  8900,
-  /*0220*/  8939,  8980,  9019,  9060,  9101,  9141,  9180,  9221,  9262,  9301,
-  /*0230*/  9343,  9382,  9423,  9464,  9503,  9544,  9585,  9625,  9666,  9707,
-  /*0240*/  9746,  9788,  9827,  9868,  9909,  9949,  9990, 10031, 10071, 10112,
-  /*0250*/ 10153, 10194, 10234, 10275, 10316, 10356, 10397, 10439, 10480, 10519,
-  /*0260*/ 10560, 10602, 10643, 10683, 10724, 10766, 10807, 10848, 10888, 10929,
-  /*0270*/ 10971, 11012, 11053, 11093, 11134, 11176, 11217, 11259, 11300, 11340,
-  /*0280*/ 11381, 11423, 11464, 11506, 11547, 11587, 11630, 11670, 11711, 11753,
-  /*0290*/ 11794, 11836, 11877, 11919, 11960, 12001, 12043, 12084, 12126, 12167,
-  /*0300*/ 12208, 12250, 12291, 12333, 12374, 12416, 12457, 12499, 12539, 12582,
-  /*0310*/ 12624, 12664, 12707, 12747, 12789, 12830, 12872, 12914, 12955, 12997,
-  /*0320*/ 13039, 13060, 13122, 13164, 13205, 13247, 13289, 13330, 13372, 13414,
-  /*0330*/ 13457, 13497, 13539, 13582, 13624, 13664, 13707, 13749, 13791, 13833,
-  /*0340*/ 13874, 13916, 13958, 14000, 14041, 14083, 14125, 14166, 14208, 14250,
-  /*0350*/ 14292, 14335, 14377, 14419, 14461, 14503, 14545, 14586, 14628, 14670,
-  /*0360*/ 14712, 14755, 14797, 14839, 14881, 14923, 14964, 15006, 15048, 15090,
-  /*0370*/ 15132, 15175, 15217, 15259, 15301, 15343, 15384, 15426, 15468, 15510,
-  /*0380*/ 15554, 15596, 15637, 15679, 15721, 15763, 15805, 15849, 15891, 15932,
-  /*0390*/ 15974, 16016, 16059, 16102, 16143, 16185, 16228, 16269, 16312, 16355,
-  /*0400*/ 16396, 16439, 16481, 16524, 16565, 16608, 16650, 16693, 16734, 16777,
-  /*0410*/ 16820, 16861, 16903, 16946, 16989, 17030, 17074, 17115, 17158, 17201,
-  /*0420*/ 17242, 17285, 17327, 17370, 17413, 17454, 17496, 17539, 17582, 17623,
-  /*0430*/ 17667, 17708, 17751, 17794, 17836, 17879, 17920, 17963, 18006, 18048,
-  /*0440*/ 18091, 18134, 18176, 18217, 18260, 18303, 18346, 18388, 18431, 18472,
-  /*0450*/ 18515, 18557, 18600, 18643, 18686, 18728, 18771, 18812, 18856, 18897,
-  /*0460*/ 18940, 18983, 19025, 19068, 19111, 19153, 19196, 19239, 19280, 19324,
-  /*0470*/ 19365, 19408, 19451, 19493, 19536, 19579, 19621, 19664, 19707, 19750,
-  /*0480*/ 19792, 19835, 19876, 19920, 19961, 20004, 20047, 20089, 20132, 20175,
-  /*0490*/ 20218, 20260, 20303, 20346, 20388, 20431, 20474, 20515, 20559, 20602,
-  /*0500*/ 20643, 20687, 20730, 20771, 20815, 20856, 20899, 20943, 20984, 21027,
-  /*0510*/ 21071, 21112, 21155, 21199, 21240, 21283, 21326, 21368, 21411, 21454,
-  /*0520*/ 21497, 21540, 21582, 21625, 21668, 21710, 21753, 21795, 21838, 21881,
-  /*0530*/ 21923, 21966, 22009, 22051, 22094, 22137, 22178, 22222, 22265, 22306,
-  /*0540*/ 22350, 22393, 22434, 22478, 22521, 22562, 22606, 22649, 22690, 22734,
-  /*0550*/ 22775, 22818, 22861, 22903, 22946, 22989, 23032, 23074, 23117, 23160,
-  /*0560*/ 23202, 23245, 23288, 23330, 23373, 23416, 23457, 23501, 23544, 23585,
-  /*0570*/ 23629, 23670, 23713, 23757, 23798, 23841, 23884, 23926, 23969, 24012,
-  /*0580*/ 24054, 24097, 24140, 24181, 24225, 24266, 24309, 24353, 24394, 24437,
-  /*0590*/ 24480, 24523, 24565, 24608, 24650, 24693, 24735, 24777, 24820, 24863,
-  /*0600*/ 24905, 24948, 24990, 25033, 25075, 25118, 25160, 25203, 25245, 25288,
-  /*0610*/ 25329, 25373, 25414, 25457, 25500, 25542, 25585, 25626, 25670, 25711,
-  /*0620*/ 25755, 25797, 25840, 25882, 25924, 25967, 26009, 26052, 26094, 26136,
-  /*0630*/ 26178, 26221, 26263, 26306, 26347, 26390, 26432, 26475, 26516, 26559,
-  /*0640*/ 26602, 26643, 26687, 26728, 26771, 26814, 26856, 26897, 26940, 26983,
-  /*0650*/ 27024, 27067, 27109, 27152, 27193, 27236, 27277, 27320, 27362, 27405,
-  /*0660*/ 27447, 27489, 27531, 27574, 27616, 27658, 27700, 27742, 27784, 27826,
-  /*0670*/ 27868, 27911, 27952, 27995, 28036, 28079, 28120, 28163, 28204, 28246,
-  /*0680*/ 28289, 28332, 28373, 28416, 28416, 28457, 28500, 28583, 28626, 28667,
-  /*0690*/ 28710, 28752, 28794, 28835, 28877, 28919, 28961, 29003, 29045, 29087,
-  /*0700*/ 29129, 29170, 29213, 29254, 29297, 29338, 29379, 29422, 29463, 29506,
-  /*0710*/ 29548, 29589, 29631, 29673, 29715, 29757, 29798, 29840, 29882, 29923,
-  /*0720*/ 29964, 30007, 30048, 30089, 30132, 30173, 30214, 30257, 30298, 30341,
-  /*0730*/ 30382, 30423, 30466, 30507, 30548, 30589, 30632, 30673, 30714, 30757,
-  /*0740*/ 30797, 30839, 30881, 30922, 30963, 31006, 31047, 31088, 31129, 31172,
-  /*0750*/ 31213, 31254, 31295, 31338, 31379, 31420, 31461, 31504, 31545, 31585,
-  /*0760*/ 31628, 31669, 31710, 31751, 31792, 31833, 31876, 31917, 31957, 32000,
-  /*0770*/ 32040, 32082, 32124, 32164, 32206, 32246, 32289, 32329, 32371, 32411,
-  /*0780*/ 32453, 32495, 32536, 32577, 32618, 32659, 32700, 32742, 32783, 32824,
-  /*0790*/ 32865, 32905, 32947, 32987, 33029, 33070, 33110, 33152, 33192, 33234,
-  /*0800*/ 33274, 33316, 33356, 33398, 33439, 33479, 33521, 33561, 33603, 33643,
-  /*0810*/ 33685, 33725, 33767, 33807, 33847, 33889, 33929, 33970, 34012, 34052,
-  /*0820*/ 34093, 34134, 34174, 34216, 34256, 34296, 34338, 34378, 34420, 34460,
-  /*0830*/ 34500, 34542, 34582, 34622, 34664, 34704, 34744, 34786, 34826, 34866,
-  /*0840*/ 34908, 34948, 34999, 35029, 35070, 35109, 35151, 35192, 35231, 35273,
-  /*0850*/ 35313, 35353, 35393, 35435, 35475, 35515, 35555, 35595, 35637, 35676,
-  /*0860*/ 35718, 35758, 35798, 35839, 35879, 35920, 35960, 36000, 36041, 36081,
-  /*0870*/ 36121, 36162, 36202, 36242, 36282, 36323, 36363, 36403, 36443, 36484,
-  /*0880*/ 36524, 36564, 36603, 36643, 36685, 36725, 36765, 36804, 36844, 36886,
-  /*0890*/ 36924, 36965, 37006, 37045, 37085, 37125, 37165, 37206, 37246, 37286,
-  /*0900*/ 37326, 37366, 37406, 37446, 37486, 37526, 37566, 37606, 37646, 37686,
-  /*0910*/ 37725, 37765, 37805, 37845, 37885, 37925, 37965, 38005, 38044, 38084,
-  /*0920*/ 38124, 38164, 38204, 38243, 38283, 38323, 38363, 38402, 38442, 38482,
-  /*0930*/ 38521, 38561, 38600, 38640, 38679, 38719, 38759, 38798, 38838, 38878,
-  /*0940*/ 38917, 38957, 38996, 39036, 39076, 39115, 39164, 39195, 39234, 39274,
-  /*0950*/ 39314, 39353, 39393, 39432, 39470, 39511, 39549, 39590, 39628, 39668,
-  /*0960*/ 39707, 39746, 39786, 39826, 39865, 39905, 39944, 39984, 40023, 40061,
-  /*0970*/ 40100, 40140, 40179, 40219, 40259, 40298, 40337, 40375, 40414, 40454,
-  /*0980*/ 40493, 40533, 40572, 40610, 40651, 40689, 40728, 40765, 40807, 40846,
-  /*0990*/ 40885, 40924, 40963, 41002, 41042, 41081, 41119, 41158, 41198, 41237,
-  /*1000*/ 41276, 41315, 41354, 41393, 41431, 41470, 41509, 41548, 41587, 41626,
-  /*1010*/ 41665, 41704, 41743, 41781, 41820, 41859, 41898, 41937, 41976, 42014,
-  /*1020*/ 42053, 42092, 42131, 42169, 42208, 42247, 42286, 42324, 42363, 42402,
-  /*1030*/ 42440, 42479, 42518, 42556, 42595, 42633, 42672, 42711, 42749, 42788,
-  /*1040*/ 42826, 42865, 42903, 42942, 42980, 43019, 43057, 43096, 43134, 43173,
-  /*1050*/ 43211, 43250, 43288, 43327, 43365, 43403, 43442, 43480, 43518, 43557,
-  /*1060*/ 43595, 43633, 43672, 43710, 43748, 43787, 43825, 43863, 43901, 43940,
-  /*1070*/ 43978, 44016, 44054, 44092, 44130, 44169, 44207, 44245, 44283, 44321,
-  /*1080*/ 44359, 44397, 44435, 44473, 44512, 44550, 44588, 44626, 44664, 44702,
-  /*1090*/ 44740, 44778, 44816, 44853, 44891, 44929, 44967, 45005, 45043, 45081,
-  /*1100*/ 45119, 45157, 45194, 45232, 45270, 45308, 45346, 45383, 45421, 45459,
-  /*1110*/ 45497, 45534, 45572, 45610, 45647, 45685, 45723, 45760, 45798, 45836,
-  /*1120*/ 45873, 45911, 45948, 45986, 46024, 46061, 46099, 46136, 46174, 46211,
-  /*1130*/ 46249, 46286, 46324, 46361, 46398, 46436, 46473, 46511, 46548, 46585,
-  /*1140*/ 46623, 46660, 46697, 46735, 46772, 46809, 46847, 46884, 46921, 46958,
-  /*1150*/ 46995, 47033, 47070, 47107, 47144, 47181, 47218, 47256, 47293, 47330,
-  /*1160*/ 47367, 47404, 47441, 47478, 47515, 47552, 47589, 47626, 47663, 47700,
-  /*1170*/ 47737, 47774, 47811, 47848, 47884, 47921, 47958, 47995, 48032, 48069,
-  /*1180*/ 48105, 48142, 48179, 48216, 48252, 48289, 48326, 48363, 48399, 48436,
-  /*1190*/ 48473, 48509, 48546, 48582, 48619, 48656, 48692, 48729, 48765, 48802,
-  /*1200*/ 48838, 48875, 48911, 48948, 48984, 49021, 49057, 49093, 49130, 49166,
-  /*1210*/ 49202, 49239, 49275, 49311, 49348, 49384, 49420, 49456, 49493, 49529,
-  /*1220*/ 49565, 49601, 49637, 49674, 49710, 49746, 49782, 49818, 49854, 49890,
-  /*1230*/ 49926, 49962, 49998, 50034, 50070, 50106, 50142, 50178, 50214, 50250,
-  /*1240*/ 50286, 50322, 50358, 50393, 50429, 50465, 50501, 50537, 50572, 50608,
-  /*1250*/ 50644, 50680, 50715, 50751, 50787, 50822, 50858, 50894, 50929, 50965,
-  /*1260*/ 51000, 51036, 51071, 51107, 51142, 51178, 51213, 51249, 51284, 51320,
-  /*1270*/ 51355, 51391, 51426, 51461, 51497, 51532, 51567, 51603, 51638, 51673,
-  /*1280*/ 51708, 51744, 51779, 51814, 51849, 51885, 51920, 51955, 51990, 52025,
-  /*1290*/ 52060, 52095, 52130, 52165, 52200, 52235, 52270, 52305, 52340, 52375,
-  /*1300*/ 52410, 52445, 52480, 52515, 52550, 52585, 52620, 52654, 52689, 52724,
-  /*1310*/ 52759, 52794, 52828, 52863, 52898, 52932, 52967, 53002, 53037, 53071,
-  /*1320*/ 53106, 53140, 53175, 53210, 53244, 53279, 53313, 53348, 53382, 53417,
-  /*1330*/ 53451, 53486, 53520, 53555, 53589, 53623, 53658, 53692, 53727, 53761,
-  /*1340*/ 53795, 53830, 53864, 53898, 53932, 53967, 54001, 54035, 54069, 54104,
-  /*1350*/ 54138, 54172, 54206, 54240, 54274, 54308, 54343, 54377, 54411, 54445,
-  /*1360*/ 54479, 54513, 54547, 54581, 54615, 54649, 54683, 54717, 54751, 54785,
-  /*1370*/ 54819, 54852, 54886
-};
-uint8_t addr[8], voltage[2], cjTemp[2], error, sign, i;
-int16_t tcVoltage, cjTemperature, tblLo, eePntr, tempC, cjComp;
-uint16_t tcBuff, tblHi, testVal;
-
-const uint32_t tempReadDelay = 125;
-
-uint8_t chipAddrArray[chipAddrSize] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-
-const char *charChipAddrArray = "0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00";
-const char *unassignedStr = "___UNASSIGNED___";
-
-
-typedef struct
-{
-  uint8_t    chipAddr[chipAddrSize];
-  int16_t    chipStatus;
-  uint32_t   tempTimer;
-  char       chipName[chipNameSize+1];
-}chipStruct;
-
-const chipStruct chipClear = { {0,0,0,0,0,0,0,0}, 0, 0, "" };
-
-chipStruct chip[maxChips] = 
-{
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" },
-  { {0,0,0,0,0,0,0,0}, 0, 0, "" }
-};
-
-typedef struct
-{
-  bool       actionEnabled;
-  chipStruct *tempPtr;
-  int16_t    tooCold;
-  chipStruct *tcPtr;
-  uint8_t    tcSwitchLastState;
-  uint32_t   tcDelay;
-  uint32_t   tcMillis;
-  int16_t    tooHot;
-  chipStruct *thPtr;
-  uint8_t    thSwitchLastState;
-  uint32_t   thDelay;
-  uint32_t   thMillis;
-  uint8_t    lcdAddr;
-  uint32_t   lcdMillis;
-}chipActionStruct;
-
-const chipActionStruct actionClear = { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 };
-
-const uint32_t lcdUpdateTimer = 1000;
-
-chipActionStruct action[maxActions] =
-{
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 },
-  { FALSE, NULL, -255, NULL, 'F', 0, 0, 255, NULL, 'F', 0, 0, 0, 0 }
-};
-
-uint8_t chipBuffer[15] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-uint8_t chipCnt, chipX = 0, actionsCnt = 0;
-
-
-// PID Stuff
-
-const uint8_t maxPIDs = 4;
-uint8_t pidCnt = 0;
-
-typedef struct
-{
-  bool       pidEnabled;
-  chipStruct *tempPtr;
-  double     pidSetPoint;
-  chipStruct *switchPtr;
-  double     pidKp;
-  double     pidKi;
-  double     pidKd;
-  int        pidDirection;
-  uint32_t   pidWindowSize;
-  uint32_t   pidwindowStartTime;
-  double     pidInput;
-  double     pidOutput;
-  PID       *myPID;
-}chipPIDStruct;
-
-const chipPIDStruct pidClear = { FALSE, NULL, 70, NULL, 0, 0, 0, 0, 5000, 0, 0, 0, NULL };
-
-chipPIDStruct ePID[maxPIDs] =
-{
-  { FALSE, NULL, 70, NULL, 0, 0, 0, 0, 5000, 0, 0, 0, NULL },
-  { FALSE, NULL, 70, NULL, 0, 0, 0, 0, 5000, 0, 0, 0, NULL },
-  { FALSE, NULL, 70, NULL, 0, 0, 0, 0, 5000, 0, 0, 0, NULL },
-  { FALSE, NULL, 70, NULL, 0, 0, 0, 0, 5000, 0, 0, 0, NULL }
-};
-
-//Specify the links and initial tuning parameters
-PID PID0(&ePID[0].pidInput,   &ePID[0].pidOutput,  &ePID[0].pidSetPoint,  (double) ePID[0].pidKp,  (double) ePID[0].pidKi,  (double) ePID[0].pidKd,  ePID[0].pidDirection);
-PID PID1(&ePID[1].pidInput,   &ePID[1].pidOutput,  &ePID[1].pidSetPoint,  (double) ePID[1].pidKp,  (double) ePID[1].pidKi,  (double) ePID[1].pidKd,  ePID[1].pidDirection);
-PID PID2(&ePID[2].pidInput,   &ePID[2].pidOutput,  &ePID[2].pidSetPoint,  (double) ePID[2].pidKp,  (double) ePID[2].pidKi,  (double) ePID[2].pidKd,  ePID[2].pidDirection);
-PID PID3(&ePID[3].pidInput,   &ePID[3].pidOutput,  &ePID[3].pidSetPoint,  (double) ePID[3].pidKp,  (double) ePID[3].pidKi,  (double) ePID[3].pidKd,  ePID[3].pidDirection);
-
-PID *pidArrayPtr[] = {&PID0, &PID1, &PID2, &PID3};
-
-// End PID Stuff
-
-
-//I2CEEPROM Stuff
-const uint32_t    I2CEEPROMsize         = 0xFFFF;  // MicroChip 24LC512
-const uint16_t    I2CEEPROMidAddr       = 0x0005;  // ID address to verify a previous I2CEEPROM write
-const uint16_t    I2CEEPROMccAddr       = 0x0010;  // number of chips found during findchips()
-const uint16_t    I2CEEPROMbjAddr       = 0x0050;  // start of Bonjour name buffer
-const uint16_t    I2CEEPROMipAddr       = 0x0500;   // start of IP address storage
-const uint16_t    I2CEEPROMchipAddr     = 0x1000;  // start address of chip structures
-const uint16_t    I2CEEPROMactionAddr   = 0x5000;  // start address of action structures
-const uint16_t    I2CEEPROMpidAddr      = 0x9000;  // start address of chip structures
-const uint8_t     I2CEEPROMidVal        = 0x55;    // Shows that an EEPROM update has occurred 
-const uint8_t     I2C0x50               = 0x50;    // device address at 0x50
-const uint8_t     I2C0x51               = 0x51;    // device address at 0x51
-const uint8_t     pageSize              = 128;     // MicroChip 24LC512 buffer page
-bool              i2cEepromReady        = FALSE;
-uint16_t          i2cEeResult16;
-uint8_t           i2cEeResult;
-uint8_t           i2cIPResult[4] = {0,0,0,0};
-
-// Ethernet Stuff
-
-// #define STATIC_IP // uncomment to use a static IP Address
-
-// The IP address will be dependent on your local network:
-// buffers for receiving and sending data
-
-char PacketBuffer[UDP_TX_PACKET_MAX_SIZE]; //buffer to hold incoming packet,
-char ReplyBuffer[UDP_TX_PACKET_MAX_SIZE];  // a string to send back
-
-
-const uint8_t wizReset = 23;         // WIZ nic reset
-
-unsigned int localPort = 2652;      // local port to listen on
-
-// set up the static IP address if you want to use one
-#ifdef STATIC_IP
-IPAddress ip(192, 168, 1, 51);
-#endif
-
-// An EthernetUDP instance to let us send and receive packets over UDP
-EthernetUDP Udp;
-
-elapsedMillis runBonjour;
-const uint32_t runBonjourTimeout = (1000 *5);
-// char IPaddrBuf[17];
-char bonjourBuf[35];
-char bonjourNameBuf[chipNameSize];
-// LCD Stuff
-
-// The shield uses the I2C SCL and SDA pins. 
-// You can connect other I2C sensors to the I2C bus and share
-// the I2C bus.
-
-Adafruit_RGBLCDShield LCD0 = Adafruit_RGBLCDShield(0);
-Adafruit_RGBLCDShield LCD1 = Adafruit_RGBLCDShield(1);
-Adafruit_RGBLCDShield LCD2 = Adafruit_RGBLCDShield(2);
-Adafruit_RGBLCDShield LCD3 = Adafruit_RGBLCDShield(3);
-Adafruit_RGBLCDShield LCD4 = Adafruit_RGBLCDShield(4);
-Adafruit_RGBLCDShield LCD5 = Adafruit_RGBLCDShield(5);
-Adafruit_RGBLCDShield LCD6 = Adafruit_RGBLCDShield(6);
-Adafruit_RGBLCDShield LCD7 = Adafruit_RGBLCDShield(7);
-
-Adafruit_RGBLCDShield *lcd[] = { &LCD0, &LCD1, &LCD2, &LCD3, &LCD4, &LCD5, &LCD6, &LCD7 };
-
-// These #defines make it easy to set the backlight color
-#define RED 0x1
-#define YELLOW 0x3
-#define GREEN 0x2
-#define TEAL 0x6
-#define BLUE 0x4
-#define VIOLET 0x5
-#define WHITE 0x7
-
-uint8_t const lcdChars = 20;
-uint8_t const lcdRows  = 4;
-uint8_t const numLCDs  = 8;
-
-char lcdStr[lcdChars + 1];
-char lcdStrBuf[lcdChars + 1];
-
-// End LCD Stuff
 
 void setup()
 {
   int x;
+
+  for(x = LED1; x <= LED5; x++)
+  {
+    pinMode(x,OUTPUT);       // test LEDs on TeensyNet > V12.0
+    digitalWrite(x, HIGH);   // turn them all off
+  }
+
   Wire.begin();
+#if __MK20DX256__ 
+  Wire1.begin();
+#endif
+
+
   Serial.begin(baudRate);
   
-  pinMode(chipStartPin, OUTPUT);
-  digitalWrite(chipStartPin, HIGH); // sync pin for DSO
   pinMode(hwMasterStopPin, INPUT_PULLUP); // set to monitor Master Stop switch
   pinMode(chipResetPin, INPUT_PULLUP); // set to monitor Reset switch
     
@@ -687,8 +173,6 @@ void setup()
   Serial.print(F("Serial Debug starting at "));
   Serial.print(baudRate);
   Serial.println(F(" baud"));
-  Serial.print(F("BUFFER_LENGTH = "));
-  Serial.println(BUFFER_LENGTH);
   Serial.print(F("UDP_TX_PACKET_MAX_SIZE = "));
   Serial.println(UDP_TX_PACKET_MAX_SIZE);
   
@@ -700,12 +184,9 @@ void setup()
     lcd[x]->home();
     lcd[x]->print(F("Serial Debug = "));
     lcd[x]->print(baudRate);
-    lcd[x]->setCursor(0, 1);
-    lcd[x]->print(F("BUFFER_LENGTH = "));
-    lcd[x]->print(BUFFER_LENGTH);
     lcd[x]->setCursor(0, 2);
     sprintf(lcdStrBuf, "%s%s", teensyType, versionStrNumber);
-    lcdCenterStr((char *) lcdStrBuf);
+    lcdCenterStr((char *) lcdStrBuf, lcdChars);
     lcd[x]->print(lcdStr);
   }
 
@@ -788,6 +269,8 @@ void setup()
   { 
     Serial.print( (sizeof(chipStruct) / sizeof(byte) ) * maxChips);
     Serial.println(F(" bytes in chip structure array"));
+    Serial.print( (sizeof(glcd1wStruct) / sizeof(byte) ) * maxGLCDs);
+    Serial.println(F(" bytes in glcd structure array"));
     Serial.print( (sizeof(chipActionStruct) / sizeof(byte) ) *maxActions);
     Serial.println(F(" bytes in action structure array"));
     Serial.print( (sizeof(chipPIDStruct) / sizeof(byte) ) *maxPIDs);
@@ -815,7 +298,13 @@ void setup()
     Serial.println();
   }
   
-  delay(2000);
+  delay(1000);
+  // reset the wiz820io
+  pinMode(w5200ResetPin, OUTPUT);
+  digitalWrite(w5200ResetPin, LOW);
+  delay(1);
+  digitalWrite(w5200ResetPin, HIGH);
+  delay(1000);
   
 #ifdef STATIC_IP  
   Ethernet.begin((uint8_t *) &mac, ip); // use this for static IP
@@ -844,6 +333,7 @@ void setup()
 #endif
 // start Bonjour service
 //  if(EthernetBonjour.begin("TeensyNetTURD"))
+  digitalWrite(LED5, LOW);
   if(EthernetBonjour.begin(bonjourNameBuf))
   {
     Serial.println(F("Bounjour Service started"));
@@ -854,22 +344,20 @@ void setup()
     Serial.println(F("Bounjour Service failed"));
   }
   EthernetBonjour.run();
+  digitalWrite(LED5, HIGH);
 
 // send startup data to status LCD (I2C address 0x27) if available  
   for(x = 0; x < numLCDs; x++)
   {
     lcd[x]->clear();
     lcd[x]->home();
-    lcdCenterStr((char *) bonjourNameBuf);
+    lcdCenterStr((char *) bonjourNameBuf, lcdChars);
     lcd[x]->print(lcdStr);
     lcd[x]->setCursor(0, 1);
     sprintf(lcdStrBuf, "%s%s", teensyType, versionStrNumber);
-    lcdCenterStr((char *) lcdStrBuf);
+    lcdCenterStr((char *) lcdStrBuf, lcdChars);
     lcd[x]->print(lcdStr);
     lcd[x]->setCursor(0, 2);
-//    lcdCenterStr("My IP address is:");
-//    lcd[x]->print(lcdStr);
-//    lcd[x]->setCursor(0, 3);
     lcd[x]->print(F("   "));
     lcd[x]->print(Ethernet.localIP());
     lcd[x]->print(F("   "));
@@ -891,6 +379,45 @@ void setup()
   }
   
   pidSetup();
+  
+  for(uint8_t q = 0; q < maxGLCDs; q++)
+  {
+    glcd1w[q].Item     = 0; // reset glcd display items
+    glcd1w[q].Position = 0;
+    glcd1w[q].Page     = 0;
+   
+    if(glcd1w[q].Addr[0] == 0x45)
+    {
+      if(setDebug & glcdSerialDebug)
+      {
+        Serial.print(F("Resetting GLCD "));
+        Serial.print(q);
+        Serial.println(F(" TeensyNet"));
+      }
+      sendCommand(dsDevice, q, setResetTeensy, 0,0,0,0,0,0,"",0,0,0,0,0,1); //initialize to landscape mode
+      delay(2000);
+      sendCommand(dsDevice, q, setInitL, 0,0,0,0,0,0,"",0,0,0,0,0,1); //initialize to landscape mode
+      for(uint8_t x = 0; x < 8; x++)
+      {
+        sendCommand(dsDevice, q, setPageWrite, 0,0,0,x,0,0,"",0,0,0,0,0,1); // select page to write to       
+        delay(100);
+        sendCommand(dsDevice, q, clrScn, 0,0,0,0,0,0,"",0,0,0,0,0,1); // clear the page
+        delay(100);
+        if(setDebug & glcdSerialDebug)
+        {
+          Serial.print(F("Initializing GLCD "));
+          Serial.print(q);
+          Serial.print(F(", Page "));
+          Serial.println(x);
+        }
+        sendCommand(dsDevice, q, setPageDisplay, 0,0,0,x,0,0,"",0,0,0,0,0,1); // display the page
+        delay(100);
+      }
+      sprintf(displayStr, "GLCD %d Initialized", q);
+      sendCommand(dsDevice, q, (setPrintStr | setFont | setColorVGA), UBUNTUBOLD,0,WHITE,0,0,0,displayStr,0,0,0,0,0,1); // clear the page
+      delay(100);
+    }
+  }
 }
 
 void loop()
@@ -932,6 +459,7 @@ void loop()
     udpProcess();
   }
 
+  digitalWrite(LED5, LOW);
   if(runBonjour >= runBonjourTimeout)
   {
     if(setDebug & udpDebug)
@@ -948,6 +476,7 @@ void loop()
     runBonjour = 0;
     EthernetBonjour.run();
   }
+  digitalWrite(LED5, HIGH);
   
   if(timer > (millis() + 5000)) // in case of rollover
   {
@@ -964,35 +493,51 @@ void loop()
   
   updateChipStatus(chipX);
   chipX++;
-  if(chipX >= maxChips){chipX = 0;}
+  if(chipX >= maxChips)
+  {
+    chipX = 0;
+    glcd1WUpdate();
+  }
   timer = millis();
   
   updateActions(actionsCnt);    
   actionsCnt++;
-  if(actionsCnt >= maxActions){actionsCnt = 0;}
+  if(actionsCnt >= maxActions)
+  {
+    actionsCnt = 0;
+    glcd1WUpdate();
+  }
+
 
   updatePIDs(pidCnt);
   pidCnt++;
-  if(pidCnt >= maxPIDs){pidCnt = 0;}
+  if(pidCnt >= maxPIDs)
+  {
+    pidCnt = 0;
+    glcd1WUpdate();
+  }
+
 
   if(setDebug & udpTimerDebug && udpTimer > 2000) // Time since Last UDP command
   {
     Serial.print(F("Time Since Last UDP Command - "));
     sprintf(lcdStrBuf, "%ld", (uint32_t) udpTimer);
-    lcdCenterStr((char *) lcdStrBuf);
+    lcdCenterStr((char *) lcdStrBuf, lcdChars);
     lcd[7]->setCursor(0, 3);
     lcd[7]->print(lcdStr);
     Serial.print(lcdStrBuf);
     Serial.println(F(" milliseconds"));
   }
-
-  if(udpTimer >= udpTimerMax) // Reset if no UDP activity for more than 1 hour
+/*
+  if(udpTimer >= udpTimerMax) // Reset if no UDP activity for more than 1 hour and 
   {
     MasterStop();
     softReset();
   }
+*/
   checkMasterStop();
   checkForReset();
+
 }
 
 void pidSetup(void)
@@ -1079,6 +624,17 @@ void readStructures(void)
     Serial.println(I2CEEPROMchipAddr, HEX);
   }
 
+  i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMglcdAddr, glcd1w, I2C0x50);
+
+
+  if(setDebug & eepromDebug)
+  {
+    Serial.print(F("Read "));
+    Serial.print(i2cEeResult16);
+    Serial.print(F(" bytes from address Ox"));
+    Serial.println(I2CEEPROMglcdAddr, HEX);
+  }
+
   if(setDebug & eepromDebug)
   {
     Serial.print(F("I2CEEPROMactionAddr = 0x"));
@@ -1113,6 +669,8 @@ void readStructures(void)
     Serial.println(F("Exiting readStructures"));
     Serial.println(F("Chip Structure"));
     displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
+    Serial.println(F("GLCD Structure"));
+    displayStructure((byte *)(uint32_t) &glcd1w, sizeof(glcd1w), sizeof(glcd1wStruct));
     Serial.println(F("Action Structure"));
     displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
     Serial.println(F("PID Structure"));
@@ -1132,6 +690,7 @@ void saveStructures(void)
     Serial.println(I2CEEPROMchipAddr, HEX);
   }
   I2CEEPROM_writeAnything(I2CEEPROMccAddr, chipCnt, I2C0x50);
+  I2CEEPROM_writeAnything(I2CEEPROMglAddr, numGLCDs, I2C0x50);
   I2CEEPROM_writeAnything(I2CEEPROMidAddr, I2CEEPROMidVal, I2C0x50);
   i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMchipAddr, chip, I2C0x50);
   if(setDebug & eepromDebug)
@@ -1143,6 +702,18 @@ void saveStructures(void)
     Serial.print(F(" from address 0x"));
     uint32_t chipStructAddr = (uint32_t) &chip[0];
     Serial.println(chipStructAddr, HEX);
+  }
+
+  i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMglcdAddr, glcd1w, I2C0x50);
+  if(setDebug & eepromDebug)
+  {
+    Serial.print(F("Wrote "));
+    Serial.print(i2cEeResult);
+    Serial.print(F(" bytes to address Ox"));
+    Serial.print(I2CEEPROMglcdAddr, HEX);
+    Serial.print(F(" from address 0x"));
+    uint32_t glcd1wStructAddr = (uint32_t) &glcd1w[0];
+    Serial.println(glcd1wStructAddr, HEX);
   }
 
   if(setDebug & eepromDebug)
@@ -1174,7 +745,10 @@ void saveStructures(void)
     Serial.print(F(" bytes to address Ox"));
     Serial.println(I2CEEPROMpidAddr, HEX);
     Serial.println(F(" Completed - Displaying chip Structures"));
+    Serial.println(F("Chip Structure"));
     displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
+    Serial.println(F("GLCD Structure"));
+    displayStructure((byte *)(uint32_t) &glcd1w, sizeof(glcd1w), sizeof(glcd1wStruct));
     Serial.println(F("Action Structure"));
     displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
     Serial.println(F("PID Structure"));
@@ -1366,11 +940,410 @@ void updatePIDs(uint8_t pidCnt)
   }
 }
 
+void glcd1WUpdate(void)
+{
+uint8_t color;
+char tempStr[7]    = "      ";
+char actionStr[16] = "               ";
+char switchStr[7] = "UNUSED";
+
+  if(setDebug & glcd1WLED)
+    digitalWrite(LED1, LOW);
+    
+  switch(glcd1w[glcdCnt].Addr[0])
+  {
+    case 0x45:
+    {
+//      Serial.println(F("GLCD Found!!"));
+      if(glcd1w[glcdCnt].Flags & glcdFActive)
+      {
+        if(setDebug & glcdSerialDebug)
+        {
+          Serial.println(F("GLCD Active!!"));
+        }
+        switch(glcd1w[glcdCnt].Flags & (glcdFAction | glcdFChip))
+        {
+          case glcdFAction:
+          {
+            switch(glcd1w[glcdCnt].Item)
+            {
+              case glcdActionSetPage:
+              {
+                if(setDebug & glcdSerialDebug)
+                {
+                  Serial.print(F("Setting Page Write to "));
+                  Serial.println(glcd1w[glcdCnt].Page);
+                }
+                sendCommand(dsDevice, glcdCnt, setPageWrite, 0, 0, 0, glcd1w[glcdCnt].Page, 0, 0, "", 0, 0, 0, 0, 0, 1); // Set the page to write into
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdDrawRectangle:
+              {
+                if(setDebug & glcdSerialDebug)
+                {
+                  Serial.print(F("Placing Filled Rectangle"));
+                }
+                if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus <= glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tooCold)
+                {
+                  color = BLUE;
+                }else if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus >= glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tooHot){
+                  color = RED;
+                }else{
+                  color = LIME;
+                }
+
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setDrawFRRect | setBackVGA), 0,
+                             BLACK, color,
+                             0, 0, 0, "",
+                             action2x2[glcd1w[glcdCnt].Position].rectX1, action2x2[glcd1w[glcdCnt].Position].rectY1,
+                             action2x2[glcd1w[glcdCnt].Position].rectX2,  action2x2[glcd1w[glcdCnt].Position].rectY2, 0, 1);
+                
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdPrintTempName:
+              {
+                if(setDebug & glcdDebug)
+                {
+                  sprintf(actionStr, "LCD %d - Page %d", glcdCnt, glcd1w[glcdCnt].Page);
+                }else{
+                  if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                      (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr == NULL)
+                    )
+                  {
+                    lcdCenterStr("UNNAMED", chipNameSize);
+//                    sprintf(actionStr, "%s", "    UNNAMED    ");
+                    sprintf(actionStr, "%s", lcdStr);
+                  }else{
+                    lcdCenterStr(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipName, chipNameSize);
+//                    sprintf(actionStr, "%s", glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipName);
+                    sprintf(actionStr, "%s", lcdStr);
+                  }
+                }
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].tFont,
+                             0, WHITE,
+                             0, 0, 0, actionStr,
+                             action2x2[glcd1w[glcdCnt].Position].tX1, action2x2[glcd1w[glcdCnt].Position].tY1, 0, 0, 0, 1);
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdPrintTemp:
+              {
+                sprintf(tempStr, "%4d""%c", glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus, '.');
+                lcdCenterStr(tempStr, 6);
+                sprintf(tempStr, "%s", lcdStr);
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].vFont,
+                             0, WHITE,
+                             0, 0, 0, tempStr,
+                             action2x2[glcd1w[glcdCnt].Position].vX1, action2x2[glcd1w[glcdCnt].Position].vY1, 0, 0, 0, 1);
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdPrintS1Name:
+              {
+                if(setDebug & glcdDebug)
+                {
+                  sprintf(actionStr, "Page %d - Pos %d", glcd1w[glcdCnt].Page, glcd1w[glcdCnt].Position);
+                }else{
+                  if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                      (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tcPtr == NULL)
+                    )
+                  {
+                    lcdCenterStr("UNNAMED", chipNameSize);
+//                    sprintf(actionStr, "%s", "    UNNAMED    ");
+                    sprintf(actionStr, "%s", lcdStr);
+                  }else{
+                    lcdCenterStr(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tcPtr->chipName, chipNameSize);
+//                    sprintf(actionStr, "%s", glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipName);
+                    sprintf(actionStr, "%s", lcdStr);
+                  }
+                }
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].s1Font,
+                             0, WHITE,
+                             0, 0, 0, actionStr,
+                             action2x2[glcd1w[glcdCnt].Position].s1X1, action2x2[glcd1w[glcdCnt].Position].s1Y1, 0, 0, 0, 1);
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdPrintS1Val:
+              {
+                if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                    (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tcPtr == NULL)
+                  )
+                {
+                  sprintf(switchStr, "%s", "UNUSED");
+                }else{
+                  if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tcPtr->chipStatus == 'N')
+                  {
+                    lcdCenterStr("ON", sizeof(switchStr));
+                  }else{
+                   lcdCenterStr("OFF", sizeof(switchStr));
+                  }
+                  sprintf(switchStr, "%s", lcdStr);
+                }
+
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].s2Font,
+                             0, WHITE,
+                             0, 0, 0, switchStr,
+                             action2x2[glcd1w[glcdCnt].Position].s2X1, action2x2[glcd1w[glcdCnt].Position].s2Y1, 0, 0, 0, 1);
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdPrintS2Name:
+              {
+                if(setDebug & glcdDebug)
+                {
+                  sprintf(actionStr, "Page %d - Pos %d", glcd1w[glcdCnt].Page, glcd1w[glcdCnt].Position);
+                }else{
+                  if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                      (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->thPtr == NULL)
+                    )
+                  {
+                    lcdCenterStr("UNNAMED", chipNameSize);
+//                    sprintf(actionStr, "%s", "    UNNAMED    ");
+                    sprintf(actionStr, "%s", lcdStr);
+                  }else{
+                    lcdCenterStr(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->thPtr->chipName, chipNameSize);
+//                    sprintf(actionStr, "%s", glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipName);
+                    sprintf(actionStr, "%s", lcdStr);
+                  }
+                }
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].s3Font,
+                             0, WHITE,
+                             0, 0, 0, actionStr,
+                             action2x2[glcd1w[glcdCnt].Position].s3X1, action2x2[glcd1w[glcdCnt].Position].s3Y1, 0, 0, 0, 1);
+                glcd1w[glcdCnt].Item += 1;
+                break;
+              }
+
+              case glcdPrintS2Val:
+              {
+                if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                    (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->thPtr == NULL)
+                  )
+                {
+                  sprintf(switchStr, "%s", "UNUSED");
+                }else{
+                  if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->thPtr->chipStatus == 'N')
+                  {
+                    lcdCenterStr("ON", sizeof(switchStr));
+                  }else{
+                   lcdCenterStr("OFF", sizeof(switchStr));
+                  }
+                  sprintf(switchStr, "%s", lcdStr);
+                }
+
+                sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].s4Font,
+                             0, WHITE,
+                             0, 0, 0, switchStr,
+                             action2x2[glcd1w[glcdCnt].Position].s4X1, action2x2[glcd1w[glcdCnt].Position].s4Y1, 0, 0, 0, 1);
+                glcd1w[glcdCnt].Item = 0;
+                glcd1w[glcdCnt].Position += 1;                
+                break;
+              }
+
+/*
+              case :
+              {
+                break;
+              }
+*/
+              default:
+              {
+                break;
+              }
+            }
+            
+            switch(glcd1w[glcdCnt].Position)
+            {
+              case 0:
+              case 1:
+              case 2:
+              case 3:
+              {
+                break; // do nothing
+              }
+              
+              case 4:
+              {
+                glcd1w[glcdCnt].Position = 0;
+                sendCommand(dsDevice, glcdCnt, setPageDisplay, 0, 0, 0, glcd1w[glcdCnt].Page, 0, 0, "", 0, 0, 0, 0, 0, 1); // Set the page to write into
+                glcd1w[glcdCnt].Page     += 1;  // set net page to write into
+                glcdCnt += 1; // on to next display
+                break;
+              }
+            }
+            
+            switch(glcd1w[glcdCnt].Page)
+            {
+              case 0:
+              case 1:
+              case 2:
+              case 3:
+              case 4:
+              case 5:
+              case 6:
+              case 7:
+              {
+                break; //do nothing
+              }
+              
+              case 8: // reset everything and go to the next page
+              {
+                glcd1w[glcdCnt].Item     = 0;
+                glcd1w[glcdCnt].Position = 0;
+                glcd1w[glcdCnt].Page     = 0;
+                glcdCnt += 1;
+                break;
+              }
+            }
+            
+            break;
+          }
+
+          case glcdFChip:
+          {
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+      }else{
+        glcdCnt += 1;
+        if( glcdCnt > 7)
+        {
+          glcdCnt = 0;
+        }
+      }
+
+      break;
+    }
+    
+    case 0:
+    default:
+    {
+      
+      glcdCnt = 0; // reset the count and start over
+      break;
+    }
+  }
+  if(setDebug & glcd1WLED)
+    digitalWrite(LED1, HIGH);  
+}
+
+void writeToGLCD(uint8_t page, uint8_t x)
+{
+  char str1[displayStrSize+1];
+
+  sendCommand(dsDevice, x, (setInitL | setPageWrite | setLCDon), 0, 
+                   0, 0,
+                   page, 0, 0, "",
+                   0, 0, 0, 0, 0, 1);
+
+  sprintf(str1, "Display %d", x);
+  sendCommand(dsDevice, x, (setBackVGA | setColorVGA | setFont | setPrintStr ), UBUNTUBOLD, 
+                   BLACK,  WHITE,
+                   0, 0, 0, str1,
+                   0, 0, 0, 0, 0, 1);
+
+  sprintf(str1, "%0X, %0X, %0X, %0X, %0X, %0X, %0X, %0X", 
+          glcd1w[x].Addr[0],glcd1w[x].Addr[1],glcd1w[x].Addr[2],glcd1w[x].Addr[3],
+          glcd1w[x].Addr[4],glcd1w[x].Addr[5],glcd1w[x].Addr[6],glcd1w[x].Addr[7]);
+  sendCommand(dsDevice, x, (setPrintStr), 0, 
+                   0, 0,
+                   0, 2, 0, str1,
+                   0, 0, 0, 0, 0, 1);
+
+  sprintf(str1, "Page %d - %ld", page, glcdCnt32);
+  glcdCnt32++;
+  sendCommand(dsDevice, x, (setPrintStr), 0, 
+                   0, 0,
+                   0, 4, 0, str1,
+                   0, 0, 0, 0, 0, 1);
+
+  sendCommand(dsDevice, x, (setPageDisplay), 0, 
+                   0, 0,
+                   page, 0, 0, "",
+                   0, 0, 0, 0, 0, 1);
+
+}
+
+
+void updateGLCD1W(int cnt, uint8_t x)
+{
+  for(uint8_t y = 0; y < chipAddrSize; y++)
+  {
+    glcd1w[cnt].Addr[y] = chip[x].chipAddr[y]; // move the address to the GLCD 1-wire array
+    chip[x].chipAddr[y] = 0; // reset the array
+  }
+
+  char str1[displayStrSize+1];
+
+// initialize the glcd structure and device
+
+  sendCommand(dsDevice, x, (setInitL | setPageWrite), 0,
+              0, 0,
+              0, 0, 0, "",
+              0, 0, 0, 0, 0, 1);
+
+  sprintf(str1, "Display %d", cnt);
+  sendCommand(dsDevice, x, (setBackVGA | setColorVGA | setFont | setPrintStr ), UBUNTUBOLD, 
+                   BLACK, WHITE,
+                   0, 0, 0, str1,
+                   0, 0, 0, 0, 0, 1);
+
+  sprintf(str1, "%0X, %0X, %0X, %0X, %0X, %0X, %0X, %0X", 
+          glcd1w[cnt].Addr[0],glcd1w[cnt].Addr[1],glcd1w[cnt].Addr[2],glcd1w[cnt].Addr[3],
+          glcd1w[cnt].Addr[4],glcd1w[cnt].Addr[5],glcd1w[cnt].Addr[6],glcd1w[cnt].Addr[7]);
+  sendCommand(dsDevice, x, (setPrintStr), 0, 
+                   0, 0,
+                   0, 2, 0, str1,
+                   0, 0, 0, 0, 0, 1);
+
+  sendCommand(dsDevice, x, (setPageDisplay), 0, 
+                   0, 0,
+                   0, 0, 0, "",
+                   0, 0, 0, 0, 0, 1);
+
+  if(setDebug & glcdSerialDebug)
+  {
+    Serial.print(F("GLCD "));
+    Serial.print(cnt);
+    Serial.print(F(" Address 0x"));
+    Serial.print((uint32_t) &(glcd1w[cnt].Addr), HEX);
+    Serial.print(F(" = {"));
+
+    for( int i = 0; i < chipAddrSize; i++)
+    {
+      if(glcd1w[cnt].Addr[i]>=0 && glcd1w[cnt].Addr[i]<16)
+      {
+        Serial.print(F("0x0"));
+      }else{
+        Serial.print(F("0x"));
+      }
+      Serial.print(glcd1w[cnt].Addr[i], HEX);
+      if(i < 7){Serial.print(F(","));}
+    }
+    Serial.println(F("}"));
+  }
+}
+
+
 void findChips(void)
 {
- int cntx = 0, cmpCnt, cmpArrayCnt, dupArray = 0, cnty;
+ int cntx = 0, cmpCnt, cmpArrayCnt, dupArray = 0, cnty, glcdCnt = 0;
 
-  digitalWrite(chipStartPin, LOW); //start DSO sync
+  digitalWrite(LED1, LOW); //start DSO sync
 
   ds.reset_search();
   delay(250);
@@ -1382,6 +1355,16 @@ void findChips(void)
   
   while (ds.search(chip[cntx].chipAddr))
   {
+    if((chip[cntx].chipAddr[0] == dsGLCD) || (chip[cntx].chipAddr[0] == dsGLCDP))
+    {
+      if(ds.crc8(chip[cntx].chipAddr, chipAddrSize-1) != chip[cntx].chipAddr[chipAddrSize-1])
+      {
+        continue;
+      }
+      updateGLCD1W(glcdCnt, cntx);
+      glcdCnt++;
+      continue;
+    }
     for(cmpCnt = 0; cmpCnt < cntx; cmpCnt++)
     {
       for(cmpArrayCnt = 0; cmpArrayCnt < chipAddrSize; cmpArrayCnt++)
@@ -1450,6 +1433,8 @@ void findChips(void)
   ds.reset_search();
   delay(250);
   chipCnt = cntx;
+  numGLCDs = glcdCnt;
+  
   if(cntx < maxChips)
   {
     for(;cntx<maxChips;cntx++)
@@ -1457,6 +1442,17 @@ void findChips(void)
       for(int y=0;y<chipAddrSize;y++)
       {
         chip[cntx].chipAddr[y]=0;
+      }
+    }
+  }
+  
+  if(glcdCnt < maxGLCDs)
+  {
+    for(;glcdCnt<maxGLCDs;glcdCnt++)
+    {
+      for(int y=0;y<chipAddrSize;y++)
+      {
+        glcd1w[glcdCnt].Addr[y]=0;
       }
     }
   }
@@ -1472,9 +1468,1203 @@ void findChips(void)
       Serial.println(F("s Detected"));
     }
   }  
-  digitalWrite(chipStartPin, HIGH); // end DSO sync
+  digitalWrite(LED1, HIGH); // end DSO sync
 }
 
+void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
+{
+  char *addrResult = NULL;
+  uint16_t addrResultCnt = 0;
+  
+  addrResult = strtok( result, addrDelim );
+  while(addrResult != NULL)
+  {
+    addrVal[addrResultCnt] = (uint8_t) strtol(addrResult, NULL, 16);
+    
+    if( (setDebug & pidDebug) || (setDebug & glcdNameUpdate) )
+    {
+      if(addrVal[addrResultCnt] >= 0 && addrVal[addrResultCnt] <= 9)
+      {
+        Serial.print(F(" 0x0"));
+      }else{
+        Serial.print(F(" 0x"));
+      }
+      Serial.print(addrVal[addrResultCnt], HEX);
+    }
+      
+    addrResultCnt++;
+    addrResult = strtok( NULL, addrDelim );
+   }
+   
+  if( (setDebug & pidDebug) || (setDebug & glcdNameUpdate) )
+  {
+    Serial.println();
+  }
+}
+
+
+void actionStatus(int x)
+{
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].actionEnabled);
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  if(action[x].tempPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tempPtr->chipStatus);
+  }
+    
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+    
+  if(action[x].tcPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].tcPtr->chipStatus);
+  }
+
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+
+  if(action[x].thPtr == NULL)
+  {
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].thPtr->chipStatus);
+  }   
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooCold);
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
+  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooHot);
+}
+
+void getAllActionStatus(void)
+{
+  for( int x = 0; x < maxActions; x++ )
+  {
+    actionStatus(x);
+    if( x < (maxActions - 1) )
+    {
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",";");
+    }
+  }
+}
+
+void getPIDStatus(uint8_t x)
+{ 
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", (int) ePID[x].pidEnabled);
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    if(ePID[x].tempPtr == NULL)
+    {
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", charChipAddrArray);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", unassignedStr);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) noChipPresent);
+    }else{
+      showChipAddress((uint8_t *) ePID[x].tempPtr->chipAddr);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", ePID[x].tempPtr->chipName);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) ePID[x].tempPtr->chipStatus);
+    }
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) ePID[x].pidSetPoint);
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    if(ePID[x].switchPtr == NULL)
+    {
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", charChipAddrArray);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", unassignedStr);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) noChipPresent);
+    }else{
+      showChipAddress((uint8_t *) ePID[x].switchPtr->chipAddr);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", ePID[x].switchPtr->chipName);      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) ePID[x].switchPtr->chipStatus);
+    }
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%.2f",(double) ePID[x].pidKp);
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%.2f",(double) ePID[x].pidKi);
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%.2f",(double) ePID[x].pidKd);
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) ePID[x].pidDirection);
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
+    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%ld",(uint32_t) ePID[x].pidWindowSize);
+}
+
+uint8_t matchChipAddress(uint8_t* array)
+{
+   uint8_t addrMatchCnt, chipAddrCnt;
+   
+  if(setDebug & pidDebug)
+  {
+   Serial.println(F("matchChipAddress"));
+  }
+  
+  for(addrMatchCnt = 0, chipAddrCnt = 0; ((addrMatchCnt < chipAddrSize) || (chipAddrCnt > chipCnt)); addrMatchCnt++)
+  {
+    if(array[addrMatchCnt] != chip[chipAddrCnt].chipAddr[addrMatchCnt])
+    {
+      addrMatchCnt = 0;
+      chipAddrCnt++;
+      
+      if(setDebug & pidDebug)
+      {
+        Serial.println(chipAddrCnt);
+      }
+  
+      continue;
+    }
+    
+    if(setDebug & pidDebug)
+    {
+      Serial.print(array[addrMatchCnt], HEX);
+      Serial.print(F(","));
+    }
+  }
+  
+  if(chipAddrCnt <= chipCnt)
+  {
+    if(setDebug & pidDebug)
+    {
+      Serial.print(F("MATCH!! - "));
+    }
+  }else{
+
+    if(setDebug & pidDebug)
+    {
+      Serial.print(F("NO MATCH!! - "));
+    }
+
+    chipAddrCnt = 0xFF;
+  }
+
+  if(setDebug & pidDebug)
+  {
+    Serial.println(chipAddrCnt);
+  }
+
+  return(chipAddrCnt);
+}
+
+uint8_t matchglcd1wAddress(uint8_t* array)
+{
+   uint8_t addrMatchCnt, glcd1wAddrCnt;
+   
+  if(setDebug & pidDebug)
+  {
+   Serial.println(F("matchglcd1wAddress"));
+  }
+  
+  for(addrMatchCnt = 0, glcd1wAddrCnt = 0; ((addrMatchCnt < chipAddrSize) || (glcd1wAddrCnt > glcdCnt)); addrMatchCnt++)
+  {
+    if(array[addrMatchCnt] != glcd1w[glcd1wAddrCnt].Addr[addrMatchCnt])
+    {
+      addrMatchCnt = 0;
+      glcd1wAddrCnt++;
+      
+      if(setDebug & pidDebug)
+      {
+        Serial.println(glcd1wAddrCnt);
+      }
+  
+      continue;
+    }
+    
+    if(setDebug & pidDebug)
+    {
+      Serial.print(array[addrMatchCnt], HEX);
+      Serial.print(F(","));
+    }
+  }
+  
+  if(glcd1wAddrCnt <= glcdCnt)
+  {
+    if(setDebug & pidDebug)
+    {
+      Serial.print(F("MATCH!! - "));
+    }
+  }else{
+
+    if(setDebug & pidDebug)
+    {
+      Serial.print(F("NO MATCH!! - "));
+    }
+
+    glcd1wAddrCnt = 0xFF;
+  }
+
+  if(setDebug & pidDebug)
+  {
+    Serial.println(glcd1wAddrCnt);
+  }
+
+  return(glcd1wAddrCnt);
+}
+
+void actionSwitchSet(uint8_t* array, uint8_t setChipState)
+{
+   uint8_t chipAddrCnt;
+
+  chipAddrCnt = matchChipAddress(array);
+  
+  if(chipAddrCnt != 0xFF)
+  {
+    setSwitch(chipAddrCnt, setChipState);
+  }
+}
+
+void showChipAddress( uint8_t* array)
+{
+  if(setDebug & findChipDebug)
+  {
+    Serial.print(F("Chip Address 0x"));
+    Serial.print((uint32_t) array, HEX);
+    Serial.print(F(" = "));
+  }
+  
+  for( int i = 0; i < chipAddrSize; i++)
+  {
+    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s", "0x");    
+    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02X",(uint8_t) array[i]);
+    if(setDebug & findChipDebug)
+    {
+      Serial.print(F("0x"));
+      if( array[i] < 0x10 ) Serial.print(F("0")); 
+      Serial.print((uint8_t) array[i], HEX);
+      if(i < 7)Serial.print(F(","));
+    }
+    if(i < 7)
+    {
+      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s",",");
+    }
+  }
+  if(setDebug & findChipDebug)
+  {
+    Serial.println();
+  }
+  
+}
+
+void showChipType(int x)
+{
+  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s", "0x");    
+  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02X", chip[x].chipAddr[0]);
+  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s"," ");
+  addChipStatus(x);
+}
+
+void showChipInfo(int x)
+{
+  showChipAddress((uint8_t *) &chip[x].chipAddr);
+  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s"," ");
+  addChipStatus(x);
+}
+
+void addChipStatus(int x)
+{
+  switch(chip[x].chipAddr[0])
+  {
+    case ds18b20ID:
+    case ds2762ID:
+    case t3tcID:
+    case max31850ID:
+    {
+      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%d", (int16_t) chip[x].chipStatus);
+      break;
+    }
+    case ds2406ID:
+    {
+      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%c", (int8_t) chip[x].chipStatus);
+      break;
+    }
+    default:
+    {
+      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%c", 'Z');
+      break;
+    }
+  }
+  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s"," ");
+  if(chip[x].chipName[0] == 0x00)
+  {
+    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s",unassignedStr);
+  }else{
+    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s", chip[x].chipName);
+  }
+}
+
+void setSwitch(uint8_t x, uint8_t setChipState)
+{
+  if(chip[x].chipAddr[0] == 0x12)
+  {
+    ds.reset();
+    ds.select(chip[x].chipAddr);
+    ds.write(ds2406MemWr);
+    ds.write(ds2406AddLow);
+    ds.write(ds2406AddHi);
+    ds.write(setChipState);
+    for ( int i = 0; i < 6; i++)
+    {
+      chipBuffer[i] = ds.read();
+    }
+    ds.write(ds2406End);
+    ds.reset();
+    updateChipStatus(x);
+  }
+}
+
+void updateChipStatus(int x)
+{
+  uint16_t chipCRCval, chipBufferCRC, noCRCmatch =1;
+
+  if( setDebug & chipStatusLED)
+    digitalWrite(LED2, LOW); //start updateStatus sync
+
+  switch(chip[x].chipAddr[0])
+  {
+    
+    case ds2762ID:
+    {
+      if(millis() >= chip[x].tempTimer + ds2762UpdateTime)
+      {
+        if(setDebug & ds2762Debug)
+        {
+          startTime = millis();
+          Serial.println(F("Enter Read DS2762 Lookup"));
+        }
+        Read_TC_Volts(x);
+        Read_CJ_Temp(x);
+        cjComp = pgm_read_word_near(kTable + cjTemperature);
+        if(setDebug & ds2762Debug)
+        {
+          Serial.print(F("kTable["));
+          Serial.print(cjTemperature);
+          Serial.print(F("] = "));
+          Serial.println(pgm_read_word_near(kTable + cjTemperature));
+        }
+        if(sign == 1)
+        {
+          if(tcVoltage < cjComp)
+          {
+            cjComp -= tcVoltage;
+          }else{
+            cjComp = 0;
+          }
+        }else{
+          cjComp += tcVoltage;
+        }
+        if(setDebug & ds2762Debug)
+        {
+          Serial.print(F("cjComp = "));
+          Serial.print(cjComp);
+          Serial.println(F(" microvolts"));
+        }
+        tblHi = kTableCnt - 1;
+        TC_Lookup();
+        if(error == 0)
+        {
+          if(setDebug & ds2762Debug)
+          {
+            Serial.print(F("Temp = "));
+            Serial.print(eePntr);
+            Serial.print(F(" degrees C, "));
+            Serial.print(((eePntr * 9) / 5) + 32);
+            Serial.println(F(" degrees F"));
+          }
+          if(showCelsius == TRUE)
+          {
+            chip[x].chipStatus = eePntr;
+          }else{
+            chip[x].chipStatus = ((eePntr * 9) / 5) + 32;
+          }
+        }else{
+          if(setDebug & ds2762Debug)
+          {
+            Serial.println(F("Value Out Of Range"));
+          }
+        }
+        if(setDebug & ds2762Debug)
+        {
+          endTime = millis();
+          Serial.print(F("Exit Read DS2762 Lookup - "));
+          Serial.print(endTime - startTime);
+          Serial.println(F(" milliseconds"));
+          Serial.println();
+          Serial.println();
+        }
+        chip[x].tempTimer = millis() + tempReadDelay;
+      }
+      break;
+    }
+    
+    case ds18b20ID:
+    case t3tcID:
+    case max31850ID:
+    {
+      if(chip[x].tempTimer == 0)
+      {
+        ds.reset();
+        ds.select(chip[x].chipAddr);
+        ds.write(0x4E); // write to scratchpad;
+        ds.write(0x00); // low alarm
+        ds.write(0x00); // high alarm
+        ds.write(0x1F); // configuration register - 9 bit accuracy (0.5deg C)
+        ds.reset();
+        ds.select(chip[x].chipAddr);
+        ds.write(0x44);         // start conversion
+        chip[x].tempTimer = millis();
+      }
+
+      if((chip[x].tempTimer != 0) && (millis() >= chip[x].tempTimer + tempReadDelay))
+      {
+        ds.reset();
+        ds.select(chip[x].chipAddr);    
+        ds.write(0xBE);         // Read Scratchpad
+  
+        for (int i = 0; i < 9; i++) 
+        {
+          chipBuffer[i] = ds.read();
+        }
+        
+        if(ds.crc8(chipBuffer, 8) != chipBuffer[8])
+        {
+          if(setDebug & crcDebug)
+          {
+            Serial.print(F("crc Error chip["));
+            Serial.print(x);
+            Serial.println(F("], resetting timer"));
+          }
+          chip[x].tempTimer = 0; // restart the chip times
+          break; // CRC invalid, try later
+        }
+      // convert the data to actual temperature
+        int raw = (chipBuffer[1] << 8) | chipBuffer[0];
+        if( showCelsius == TRUE)
+        {
+          if(chip[x].chipAddr[0] == 0xAA)
+          {
+            chip[x].chipStatus = raw;
+          }else{
+            chip[x].chipStatus = (int16_t) ((float)raw / 16.0);
+          }
+        }else{
+          if(chip[x].chipAddr[0] == 0xAA)
+          {
+            chip[x].chipStatus = (int16_t) ((((float)raw) * 1.8) + 32.0) ;
+          }else{
+            chip[x].chipStatus = (int16_t) ((((float)raw / 16.0) * 1.8) + 32.0);
+          }
+        }
+        chip[x].tempTimer = 0;
+      }
+      break;
+    }
+    
+    case ds2406ID:
+    {
+      while(noCRCmatch)
+      {
+        ds.reset();
+        ds.select(chip[x].chipAddr);
+        ds.write(ds2406MemRd);
+        chipBuffer[0] = ds2406MemRd;
+        ds.write(0x0); //2406 Addr Low
+        chipBuffer[1] = 0;
+        ds.write(0x0); //2406 Addr Hgh
+        chipBuffer[2] = 0;
+        for(int i = 3; i <  13; i++)
+        {
+          chipBuffer[i] = ds.read();
+        }
+        ds.reset();
+
+        chipCRCval = ~(ds.crc16(chipBuffer, 11)) & 0xFFFF;
+        chipBufferCRC = ((chipBuffer[12] << 8) | chipBuffer[11]) ;
+
+        if(setDebug & chipDebug)
+        {
+          Serial.print(F("chip "));
+          Serial.print(x);
+          Serial.print(F(" chipCRC = 0X"));
+          Serial.print(chipCRCval, HEX);
+          Serial.print(F(", chipBufferCRC = 0X"));
+          Serial.println(chipBufferCRC, HEX);
+        }
+        
+        if(chipBufferCRC == chipCRCval) noCRCmatch = 0;
+        
+        if(chipBuffer[10] & dsPIO_A)
+        {
+          chip[x].chipStatus = switchStatusOFF;
+        }else{
+          chip[x].chipStatus = switchStatusON;
+        }
+      }
+      break;
+    }
+    
+    default:
+    {
+      chip[x].chipStatus = noChipPresent;
+      break; 
+    }
+  }
+  if( setDebug & chipStatusLED)
+  {  
+    digitalWrite(LED2, HIGH); //stop updateStatus sync
+  }else{
+    delayMicroseconds(100);
+  }
+}
+
+void updateActions(uint8_t x)
+{
+  uint8_t LCDx, y, tempStrCnt;
+  char tempStr[6];
+  uint32_t lcdUpdateStart, lcdUpdateStop;
+
+  if(action[x].actionEnabled == TRUE)
+  {
+    if(action[x].tempPtr->chipStatus <= action[x].tooCold &&
+       action[x].tcPtr->chipStatus == switchStatusOFF) // too cold
+    {
+      if(action[x].tcDelay == 0 || millis() > (action[x].tcMillis + action[x].tcDelay))
+      {
+        actionSwitchSet((uint8_t *) &action[x].tcPtr->chipAddr, ds2406PIOAon);
+        
+      }
+    }else if(action[x].tempPtr->chipStatus > action[x].tooCold &&
+             action[x].tcPtr->chipStatus == switchStatusON){
+               
+      actionSwitchSet((uint8_t *) &action[x].tcPtr->chipAddr, ds2406PIOAoff);
+      action[x].tcMillis = millis();
+       
+    }
+
+    if(action[x].tempPtr->chipStatus >= action[x].tooHot &&
+       action[x].thPtr->chipStatus == switchStatusOFF) //too hot
+    {
+      if(action[x].thDelay == 0 || millis() > (action[x].thMillis + action[x].thDelay))
+      {
+        actionSwitchSet((uint8_t *) &action[x].thPtr->chipAddr, ds2406PIOAon);
+        
+      }
+    }else if(action[x].tempPtr->chipStatus < action[x].tooHot &&
+             action[x].thPtr->chipStatus == switchStatusON){
+               
+      actionSwitchSet((uint8_t *) &action[x].thPtr->chipAddr, ds2406PIOAoff);
+      action[x].thMillis = millis();
+               
+    }
+    
+    if( (action[x].lcdAddr >= 32 ) &&
+        (action[x].lcdAddr <= 38 ) &&
+        ( (action[x].lcdMillis + lcdUpdateTimer) <= millis())
+      )
+    {
+      if(setDebug & lcdDebug)
+      {
+        lcdUpdateStart = millis();
+      }
+      LCDx = (action[x].lcdAddr - 32);
+//      lcd[LCDx]->clear();
+      lcd[LCDx]->home();
+      lcd[LCDx]->print(F("     Action #"));
+      lcd[LCDx]->print(x);
+      lcd[LCDx]->print(F("      "));
+      lcd[LCDx]->setCursor(0, 1);
+      tempStrCnt = strlen(action[x].tempPtr->chipName);
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("tempStrCnt for "));
+        Serial.print(action[x].tempPtr->chipName);
+        Serial.print(F(" is "));
+        Serial.println(tempStrCnt);
+      }
+      lcd[LCDx]->print(action[x].tempPtr->chipName);
+      lcd[LCDx]->setCursor(tempStrCnt, 1);
+      for( y = (tempStrCnt); y < (lcdChars - 5); y++ )
+      {
+        lcd[LCDx]->print(F(" "));
+      }
+      tempStrCnt = sprintf( tempStr, "%d", (int16_t) action[x].tempPtr->chipStatus);
+      if(setDebug & lcdDebug)
+      {
+        Serial.print(F("tempStrCnt for action["));
+        Serial.print(x);
+        Serial.print(F("]tempPtr.->chipStatus"));
+        Serial.print(F(" is "));
+        Serial.print(tempStrCnt);
+        Serial.print(F(" and the chipStatus is "));
+        Serial.println((int16_t) action[x].tempPtr->chipStatus);
+     }
+
+      switch(tempStrCnt)
+      {
+        case 1:
+          {
+            lcd[LCDx]->print(F("    "));            
+            break;
+          }
+        case 2:
+          {
+            lcd[LCDx]->print(F("   "));            
+            break;
+          }
+        case 3:
+          {
+            lcd[LCDx]->print(F("  "));            
+            break;
+          }
+        case 4:
+          {
+            lcd[LCDx]->print(F(" "));            
+            break;
+          }
+      }
+      lcd[LCDx]->print((int16_t) action[x].tempPtr->chipStatus);
+      lcd[LCDx]->setCursor(0, 2);
+      if(action[x].tcPtr != NULL)
+      {
+        tempStrCnt = strlen(action[x].tcPtr->chipName);
+      }else{
+        tempStrCnt= strlen("NOT USED");
+      }
+      if(setDebug & lcdDebug)
+      {
+        if(action[x].tcPtr != NULL)
+        {
+          Serial.print(F("tempStrCnt for "));
+          Serial.print(action[x].tcPtr->chipName);
+          Serial.print(F(" is "));
+          Serial.println(tempStrCnt);
+        }else{
+          Serial.print(F("action["));
+          Serial.print(x);
+          Serial.println(F("].tcPtr->chipName is not used"));
+        }
+      }
+      
+      if(action[x].tcPtr != NULL)
+      {
+        lcd[LCDx]->print(action[x].tcPtr->chipName);
+      }else{
+        lcd[LCDx]->print(F("NOT USED"));
+      }
+
+      lcd[LCDx]->setCursor(tempStrCnt, 2);
+      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
+      {
+        lcd[LCDx]->print(F(" "));
+      }
+      lcd[LCDx]->setCursor(16, 2);
+      if(action[x].tcPtr->chipStatus == 'N')
+      {
+        lcd[LCDx]->print(F(" ON "));
+      }else{
+        lcd[LCDx]->print(F(" OFF"));
+      }
+      
+      lcd[LCDx]->setCursor(0, 3);
+      if(action[x].thPtr != NULL)
+      {
+        tempStrCnt = strlen(action[x].thPtr->chipName);
+      }else{
+        tempStrCnt= strlen("NOT USED");
+      }
+      if(setDebug & lcdDebug)
+      {
+        if(action[x].thPtr != NULL)
+        {
+          Serial.print(F("tempStrCnt for "));
+          Serial.print(action[x].thPtr->chipName);
+          Serial.print(F(" is "));
+          Serial.println(tempStrCnt);
+        }else{
+          Serial.print(F("action["));
+          Serial.print(x);
+          Serial.println(F("].thPtr->chipName is not used"));
+        }
+      }
+      if(action[x].thPtr != NULL)
+      {
+        lcd[LCDx]->print(action[x].thPtr->chipName);
+      }else{
+        lcd[LCDx]->print(F("NOT USED"));
+      }
+      lcd[LCDx]->setCursor(tempStrCnt, 3);
+      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
+      {
+        lcd[LCDx]->print(F(" "));
+      }
+      lcd[LCDx]->setCursor(16, 3);
+      if(action[x].thPtr->chipStatus == 'N')
+      {
+        lcd[LCDx]->print(F(" ON "));
+      }else{
+        lcd[LCDx]->print(F(" OFF"));
+      }
+      action[x].lcdMillis = millis();
+      
+      if(setDebug & lcdDebug)
+      {
+        lcdUpdateStop = millis();
+        Serial.print(F("lcdupdate took "));
+        Serial.print(lcdUpdateStop - lcdUpdateStart);
+        Serial.println(F(" milliseconds"));
+      }
+
+    }
+  }
+}
+
+void EEPROMclear(void)
+{
+  uint8_t page[pageSize], y;
+  char I2CStr[chipNameSize+1];
+  uint32_t x;
+  lcd[7]->clear();
+  lcd[7]->home();
+  lcd[7]->print(F(" Clearing I2CEEPROM "));
+
+  for(y = 0; y < pageSize; y++) page[y] = 0xff;
+  for(x = 0; x < I2CEEPROMsize; x += pageSize)
+  {
+    I2CEEPROM_writeAnything(x, page, I2C0x50);
+    lcd[7]->setCursor(0, 1);
+    sprintf(I2CStr, "0X%04X", (uint16_t) x);
+    lcdCenterStr(I2CStr, lcdChars);
+    lcd[7]->print(lcdStr);
+    lcd[7]->setCursor(0, 2);
+    lcdCenterStr("Bytes Cleared", lcdChars);
+    lcd[7]->print(lcdStr);
+  }
+  if(setDebug & eepromDebug)
+  {
+    Serial.println(F("Exiting readStructures"));
+    Serial.println(F("Chip Structure"));
+    displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
+    Serial.println(F("Action Structure"));
+    displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
+    Serial.println(F("PID Structure"));
+    displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
+  }
+  lcd[7]->setCursor(0, 3);
+  lcdCenterStr("Finished", lcdChars);
+  lcd[7]->print(lcdStr);
+}
+
+void MasterStop(void)
+{
+  int x;
+// turn off all switches
+  for(x=0; x<maxChips; x++)
+  {
+    setSwitch(x, ds2406PIOAoff);
+  }
+  for(x=0; x<maxActions; x++)
+  {
+    action[x].actionEnabled = FALSE;
+  }
+}
+
+void softReset(void)
+{
+  // 0000101111110100000000000000100
+  // Assert [2]SYSRESETREQ
+  WRITE_RESTART(0x5FA0004);
+}  
+
+
+void Read_TC_Volts(uint8_t x)
+{ 
+  if(setDebug & ds2762Debug)
+  {
+    Serial.println(F("Enter Read_TC_Volts"));
+  }
+  ds.reset();
+  ds.select(chip[x].chipAddr);
+  ds.write(0x69); //read voltage
+  ds.write(0x0e);
+  for (i = 0; i < 2; i++)
+  {
+    voltage[i] = ds.read();
+    if(setDebug & ds2762Debug)
+    {
+      Serial.print(F("voltage["));
+      Serial.print(i);
+      Serial.print(F("] = 0x"));
+      if(voltage[i] < 0x10){Serial.print(F("0"));}
+      Serial.print(voltage[i], HEX);
+      Serial.print(F(" "));
+    }
+  }
+  if(setDebug & ds2762Debug)
+  {
+    Serial.println();
+  }
+  ds.reset();
+  tcVoltage = (voltage[0] << 8) + voltage[1];
+  tcVoltage >>= 3; 
+  if((voltage[0] & 0x80) == 0x80)
+  {
+    sign = 1;
+    tcVoltage |= 0xF000;
+    tcVoltage = ~tcVoltage;
+    tcVoltage += 1;
+  }else{
+    sign = 0;
+  }
+  tcBuff = tcVoltage * 15;
+  tcVoltage *= 5;
+  tcVoltage >>= 3;
+  tcVoltage += tcBuff;
+  
+  if(setDebug & ds2762Debug)
+  {
+    Serial.print(F("tcVoltage = "));
+    Serial.print(tcVoltage);
+    Serial.println(F(" microvolts"));
+    Serial.println(F("Exit Read_TC_Volts"));
+  }
+} 
+
+/* Reads cold junction (device) temperature 
+-- each raw bit = 0.125 degrees C 
+-- returns tmpCJ in whole degrees C */ 
+void Read_CJ_Temp(uint8_t x)
+{ 
+  if(setDebug & ds2762Debug)
+  {
+    Serial.println(F("Enter Read_CJ_Temp"));
+  }
+  ds.reset();
+  ds.select(chip[x].chipAddr);
+  ds.write(0x69);
+  ds.write(0x18); //read cjTemp
+  for (i = 0; i < 2; i++)
+  {
+    cjTemp[i] = ds.read();
+    if(setDebug & ds2762Debug)
+    {
+      Serial.print(F("cjTemp["));
+      Serial.print(i);
+      Serial.print(F("] = 0x"));
+      if(cjTemp[i] < 0x10){Serial.print(F("0"));}
+      Serial.print(cjTemp[i], HEX);
+      Serial.print(F(" "));
+    }
+  }
+  if(setDebug & ds2762Debug)
+  {
+    Serial.println();
+  }
+  ds.reset();
+  cjTemperature = (cjTemp[0] << 8) + cjTemp[1];
+  if(cjTemperature>=0x8000)
+  { 
+    cjTemperature = 0;
+//    cjdTemperature = 0.0; // disallow negative 
+  }else{
+//    cjdTemperature =  (double) ((double) cjTemperature) * .125;
+    cjTemperature >>= 8;
+  } 
+  if(setDebug & ds2762Debug)
+  {
+    Serial.print(F("cjTemperature = "));
+    Serial.print(cjTemperature);
+    Serial.print(F(" degrees C, "));
+    Serial.print(((cjTemperature * 9) / 5) + 32);
+    Serial.println(F(" degrees F")); 
+    Serial.println(F("Exit Read_CJ_Temp"));
+  }
+} 
+
+/* Search currently selected TC table for nearest entry 
+-- uses modified binary algorithm to find cjComp 
+-- high end of search set before calling (tblHi) 
+-- successful search sets tempC */ 
+void TC_Lookup(void)
+{ 
+  if(setDebug & ds2762Debug)
+  {
+    Serial.println(F("Enter TC_Lookup"));
+  }
+  tblLo=0; // low entry of table 
+  tempC=22; // default to room temp
+  testVal=pgm_read_word_near(kTable + tblHi); // check max temp
+  if(cjComp>testVal)
+  { 
+    error=1; // out of range 
+  }else{ 
+    while(1)
+    { 
+      eePntr=(tblLo+tblHi)/2; // midpoint of search span 
+      testVal=pgm_read_word_near(kTable + eePntr); // read value from midpoint
+      if(setDebug & ds2762Debug)
+      {
+        Serial.print(F("testVal = "));
+        Serial.print(testVal);
+      }
+      if(cjComp == testVal)
+      {
+        if(setDebug & ds2762Debug)
+        {
+          Serial.println(F(" - TC_Lookup Temp Match"));
+        }
+//        tempC = eePntr;
+        return; // found it! 
+      }else{
+        if(cjComp<testVal)
+        {
+          if(setDebug & ds2762Debug)
+          {
+             Serial.println(F(" - testVal too BIG"));
+          }
+         tblHi=eePntr; //search lower half
+        }else{
+          if(setDebug & ds2762Debug)
+          {
+             Serial.println(F(" - testVal too small"));
+          }
+         tblLo=eePntr; // search upper half
+        }
+      }
+      if(setDebug & ds2762Debug)
+      {
+        Serial.print(F("tblHi = "));
+        Serial.print(tblHi);
+        Serial.print(F(", tblLo = "));
+        Serial.println(tblLo);
+      }
+      if((tblHi-tblLo)<2)
+      { // span at minimum 
+        if(setDebug & ds2762Debug)
+        {
+          Serial.println(F("TC_Lookup Temp Span At Minimum"));
+        }
+        eePntr=tblLo; 
+        return; 
+      } 
+    } 
+  }
+}
+
+void lcdCenterStr(char *str, uint8_t len)
+{
+  uint8_t lcdPad, x;
+  for(x=0; x<=len; x++) lcdStr[x] = 0x20; // fill lcdStr with spaces
+  lcdStr[x] = 0x00; // terminate the string
+  
+  if(strlen(str) > len)
+  {
+    strcpy(lcdStr, "  ERROR - TOO LONG  ");
+    if(setDebug & lcdDebug)
+    {
+      Serial.println(F("String was too long for the LCD display"));
+    }
+  }else if(strlen(str) == len){
+    strcpy(lcdStr, str);
+    if(setDebug & lcdDebug)
+    {
+      Serial.println(F("String was exactly right for the LCD display"));
+    }
+  }else{
+    
+    if(setDebug & lcdDebug)
+    {
+      Serial.print(F("Input String = "));
+      Serial.println(str);
+      Serial.print(F("strlen(str) = "));
+      Serial.print(strlen(str));
+      Serial.println(F(" bytes"));
+    }
+
+    lcdPad = (len - strlen(str)) / 2;
+    if(setDebug & lcdDebug)
+    {
+      Serial.print(F("lcdPad = "));
+      Serial.println(lcdPad);
+    }
+
+    memcpy(&lcdStr[lcdPad], str, strlen(str));
+    if(setDebug & lcdDebug)
+    {
+      Serial.println(F("String was smaller than the LCD Display"));
+      Serial.print(F("lcdStr = \""));
+      Serial.print(lcdStr);
+      Serial.println(F("\""));
+    }
+  }
+}
+
+void checkMasterStop(void)
+{
+  if(setDebug & resetDebug)
+  { 
+    Serial.println(F("Checking Master Stop"));
+  }
+  elapsedMillis MSTimer = 0;
+  while(digitalRead(hwMasterStopPin) == LOW)
+  {
+    if(MSTimer >= 1000)
+    {
+      if(setDebug & resetDebug)
+      { 
+        Serial.println(F("Executing Master Stop"));
+      }
+      MasterStop();
+      break;
+    }
+  }
+}
+
+void checkForReset(void)
+{
+  if(setDebug & resetDebug)
+  { 
+    Serial.println(F("Checking Reset"));
+  }
+  elapsedMillis resetTimer = 0;
+  while(digitalRead(chipResetPin) == LOW)
+  {
+    if(resetTimer >= 1000)
+    {
+      if(setDebug & resetDebug)
+      { 
+        Serial.println(F("Executing Reset"));
+      }
+      MasterStop();
+      softReset();
+      break;
+    }
+  }
+}
+
+void KickDog(void)
+{
+  digitalWrite(LED5, LOW);
+  if(setDebug & wdDebug)
+  {
+    Serial.println("Kicking the dog!");
+  }
+  noInterrupts();
+  WDOG_REFRESH = 0xA602;
+  WDOG_REFRESH = 0xB480;
+  interrupts();
+  digitalWrite(LED5, HIGH);
+}
+
+
+/**** Begin TeensyNetGLCD functions ****/
+void sendCommand(uint8_t deviceType, uint8_t device, uint32_t  flags ,
+                 uint8_t font, uint8_t bGR, uint8_t cR,
+                 uint8_t dispP, uint8_t lineP, uint16_t chrP, 
+                 char *dSTR, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t rad, uint8_t bRDY)
+{
+
+  uint8_t len, x, i;
+
+  if(setDebug & glcdDebug)
+  {
+    digitalWrite(LED5, LOW);
+  }
+  glcdUNION.glcdBUF.flags = flags;
+  glcdUNION.glcdBUF.font = font;
+  glcdUNION.glcdBUF.bGR =  bGR;
+  glcdUNION.glcdBUF.cR = cR;
+  glcdUNION.glcdBUF.dispP = dispP;
+  glcdUNION.glcdBUF.lineP = lineP;
+  glcdUNION.glcdBUF.chrP = chrP;
+  sprintf(glcdUNION.glcdBUF.dSTR, "%s", dSTR);
+  glcdUNION.glcdBUF.x1 = x1;
+  glcdUNION.glcdBUF.y1 = y1;
+  glcdUNION.glcdBUF.x2 = x2;
+  glcdUNION.glcdBUF.y2 = y2;
+  glcdUNION.glcdBUF.rad = rad;
+  glcdUNION.glcdBUF.bRDY = 1;
+
+  x=0;
+  if(deviceType == dsDevice)
+  {
+    if(setDebug & glcdSerialDebug)
+    {
+      Serial.print(F("GLCD Addr: "));
+      Serial.print(x);
+      Serial.print(F(" = "));
+      for( i = 0; i < 8; i++)
+      {
+        Serial.print(F("0x"));
+        if(glcd1w[device].Addr[i] < 16) Serial.print(F("0"));
+        Serial.print(glcd1w[device].Addr[i], HEX);
+        Serial.print(F(" "));
+      }
+      Serial.println();
+    }else{
+      delayMicroseconds(50);
+    }
+    if( (setDebug & glcdSerialDebug) || (setDebug & glcdSerialDebug) )
+    {
+      digitalWrite(LED4, LOW);
+    }
+    ds.reset();
+    ds.select(glcd1w[device].Addr);
+    ds.write(0x0F);                     // Write to GLCD
+    ds.write_bytes(glcdUNION.glcdARRAY, sizeof(glcdCMD));
+    if( (setDebug & glcdSerialDebug) || (setDebug & glcdSerialDebug) )
+    {
+      digitalWrite(LED4, HIGH);
+    }
+    if(setDebug & glcdSerialDebug)
+    {
+      Serial.print(F("DATA = "));
+      for( i = 0; i < sizeof(glcdCMD); i++)
+      {
+        Serial.print(F("0x"));
+        if(glcdUNION.glcdARRAY[i] < 16) Serial.print(F("0"));
+        Serial.print(glcdUNION.glcdARRAY[i], HEX);
+        Serial.print(F(" "));
+      }
+      Serial.println();
+    }
+    if(setDebug & glcdSerialDebug)
+    {
+      delay(50);
+    }else{
+      delay(40);
+    }
+  }else
+  {
+  }
+  if(setDebug & glcdDebug)
+  {
+    digitalWrite(LED5, HIGH);
+  }
+}
+
+void clearCommandBuf(void)
+{
+  for(uint8_t x = 0; x< sizeof(glcdCMD); x++)
+  {
+    glcdUNION.glcdARRAY[x] = 0;
+  }
+}
+
+void clearDisplayStr(void)
+{
+  uint8_t x;
+  
+  for(x = 0; x < displayStrSize; x++)
+  {
+    displayStr[x] = ' ';
+  }
+  displayStr[x] = 0x00;
+}
+/**** End   TeensyNetGLCD functions ****/
 void sendUDPpacket(void)
 {
   int v = 0, q = 0;
@@ -1541,6 +2731,9 @@ void udpProcess(void)
 
   rBuffCnt = 0;
 
+  if(setDebug & udpProcessLED)
+    digitalWrite(LED3, LOW); // start updProcess sync
+    
   if(setDebug & ethDebug) // display Process Command Letter
   {
     lcd[7]->setCursor(0, 3);
@@ -1775,7 +2968,7 @@ void udpProcess(void)
         Serial.println(F(" to I2CEEPROM"));
       }
       lcd[7]->setCursor(0, 0);
-      lcdCenterStr(bonjourNameBuf);
+      lcdCenterStr(bonjourNameBuf, lcdChars);
       lcd[7]->print(lcdStr);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "Service Record set to %s", bonjourBuf);
       sendUDPpacket();
@@ -2729,27 +3922,249 @@ void udpProcess(void)
     
     case setAction: // "U"
     {
-      result = strtok( PacketBuffer, delim );
-      char* actionArrayCtr      = strtok( NULL, delim );
-      char* actionEnabledVal    = strtok( NULL, delim );
-      
-      x = atoi(actionArrayCtr);
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "Action %d ", x);
-      if (atoi(actionEnabledVal) == 0)
+      if(PacketBuffer[1] == ' ')
       {
-        setChipState = ds2406PIOAoff;
-        actionSwitchSet((uint8_t *) action[x].tcPtr->chipAddr, setChipState);
-        actionSwitchSet((uint8_t *) action[x].thPtr->chipAddr, setChipState);
-        action[x].actionEnabled = FALSE;
-        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "DISABLED");
+        result = strtok( PacketBuffer, delim );
+        char* actionArrayCtr      = strtok( NULL, delim );
+        char* actionEnabledVal    = strtok( NULL, delim );
+      
+        x = atoi(actionArrayCtr);
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "Action %d ", x);
+        if (atoi(actionEnabledVal) == 0)
+        {
+          setChipState = ds2406PIOAoff;
+          actionSwitchSet((uint8_t *) action[x].tcPtr->chipAddr, setChipState);
+          actionSwitchSet((uint8_t *) action[x].thPtr->chipAddr, setChipState);
+          action[x].actionEnabled = FALSE;
+          rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "DISABLED");
+        }else{
+          action[x].actionEnabled = TRUE;
+          rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ENABLED");
+        }
       }else{
-        action[x].actionEnabled = TRUE;
-        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ENABLED");
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "INVALID");
       }
       sendUDPpacket();
       break;
     }
 
+    case getMaxGLCDs: // "V"
+    {
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", maxGLCDs);
+      sendUDPpacket();
+      break;
+    }
+    
+    case getGLCDcnt: // "W"
+    {
+      I2CEEPROM_readAnything(I2CEEPROMglAddr, numGLCDs, I2C0x50);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", numGLCDs);
+      sendUDPpacket();
+      break;
+    }
+    
+    case getGLCDstatus: // "X"
+    {
+      x = atoi((char *) &PacketBuffer[1]);
+     if(x >= maxGLCDs)
+      {
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
+      }else{
+        Serial.print(F("glcd1w["));
+        Serial.print(x);
+        Serial.print(F("].Name = "));
+        Serial.println(glcd1w[x].Name);
+        if( (glcd1w[x].Name[0] == ' ') || (glcd1w[x].Name[0] == 0x00) )
+        {
+          rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "NULL,",x);
+        }else{
+          rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s,", glcd1w[x].Name);
+        }
+        rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02x,",glcd1w[x].Flags);
+        for( uint8_t ActionCnt = 0; ActionCnt < maxGLCDactions; ActionCnt++)
+        {
+          if(glcd1w[x].Action[ActionCnt] == NULL)
+          {
+            rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s,","NULL");
+          }else{
+            rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%08x,",glcd1w[x].Action[ActionCnt]);
+          }
+        }
+        for( uint8_t ChipCnt = 0; ChipCnt < maxGLCDchips; ChipCnt++)
+        {
+          if(glcd1w[x].Chip[ChipCnt] == NULL)
+          {
+            rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s,","NULL");
+          }else{
+            rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%08x,",glcd1w[x].Chip[ChipCnt]);
+          }
+        }
+        for(uint8_t addrCnt = 0; addrCnt < chipAddrSize; addrCnt++)
+        {
+          rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02x;",glcd1w[x].Addr[addrCnt]);
+        }
+      }
+      ReplyBuffer[rBuffCnt-1] = 0x00;  // remove the last "," and terminate the string
+      sendUDPpacket();
+      break;
+    }
+
+    case setGLCD: // "Y" Y DEV FLAGS POSITION ACTION
+    {
+      if(PacketBuffer[1] == ' ')
+      {
+        result = strtok( PacketBuffer, delim );
+        char* dev       = strtok( NULL, delim );
+        char* flags     = strtok( NULL, delim );
+        char* position  = strtok( NULL, delim );
+        char* actionNum = strtok( NULL, delim );
+      
+        x = atoi(dev);
+        glcd1w[x].Flags = atoi(flags);
+        uint8_t glcdPosition = atoi(position);
+        uint32_t glcdAction = strtoul(actionNum, NULL, 16);
+        glcd1w[x].Action[glcdPosition] = (chipActionStruct *) glcdAction;
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d,%d,%d %08x", x, glcd1w[x].Flags, glcdPosition, glcd1w[x].Action[glcdPosition]);
+      }else{
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "INVALID");
+      }
+      sendUDPpacket();
+      break;
+    }
+
+    case getStructAddr: // "Z"
+    {
+      x = atoi((char *) &PacketBuffer[2]);
+      switch(PacketBuffer[1])
+      {
+        case 'A': //Actions
+        {
+          if(x > maxActions)
+          {
+            rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "INVALID - Action Too Large");
+          }else{
+            rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%08x", &action[x]);
+          }
+          break;
+        }
+        
+        case 'C': //chips
+        {
+          if(x > maxChips)
+          {
+            rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "INVALID - Chip Too Large");
+          }else{
+            rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%08x", &chip[x]);
+          }
+          break;
+        }
+        
+        case 'P': //PIDs
+        {
+          if(x > maxPIDs)
+          {
+            rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "INVALID - PID Too Large");
+          }else{
+            rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%08x", &ePID[x]);
+          }
+          break;
+        }
+        
+        default:
+        {
+          rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "INVALID Selection");
+          break;
+        }
+      }
+      sendUDPpacket();
+      break;
+    }
+
+    case updateglcd1wName: // "a"
+    {
+      uint8_t cnCnt;
+      
+      if(setDebug & glcdNameUpdate)
+      {
+        Serial.println(F("updateglcd1wName Enter"));
+        Serial.println(PacketBuffer);
+      }
+      
+      result = strtok( PacketBuffer, delim );
+      char* glcd1wNameAddr      = strtok( NULL, delim );
+      char* glcd1wNameStr       = strtok( NULL, delim ); 
+     
+      if(setDebug & glcdNameUpdate)
+      {
+        Serial.print(F("glcd1wNameAddr = "));
+        for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
+        {
+          Serial.print(F("0x"));
+          if(glcd1wNameAddr[cnCnt] < 0x0f)
+          {
+            Serial.print(F("0"));
+          }
+          Serial.print(glcd1wNameAddr[cnCnt], HEX);
+          if(cnCnt < chipNameSize - 1)
+          {
+            Serial.print(F(","));
+          }
+        }
+        Serial.println();
+        Serial.print(F("glcd1wNameStr = "));
+        Serial.println(glcd1wNameStr);
+      }
+      
+      asciiArrayToHexArray(glcd1wNameAddr, addrDelim, addrVal);
+      uint8_t glcd1wAddrCnt = matchglcd1wAddress(addrVal);
+      
+      if(setDebug & glcdNameUpdate)
+      {
+        Serial.print(F("glcd1wAddrCnt = "));
+        Serial.println(glcd1wAddrCnt);
+      }
+      for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)  // clear the name array
+      {
+        glcd1w[glcd1wAddrCnt].Name[cnCnt] = 0x00;
+      }
+      
+      strcpy(glcd1w[glcd1wAddrCnt].Name, glcd1wNameStr); //copy the name array
+
+      for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
+      {
+        if(glcd1w[glcd1wAddrCnt].Name[cnCnt] < 0x30 || glcd1w[glcd1wAddrCnt].Name[cnCnt] > 0x7A)
+        {
+          glcd1w[glcd1wAddrCnt].Name[cnCnt] = 0x00; //remove non-ascii characters
+        }
+      }
+
+      if(setDebug & glcdNameUpdate)
+      {
+        Serial.print(F("glcd1w["));
+        Serial.print(glcd1wAddrCnt);
+        Serial.print(F("].Name = "));
+        Serial.println(glcd1w[glcd1wAddrCnt].Name);
+        for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
+        {
+          Serial.print(F("0x"));
+          if(glcd1w[glcd1wAddrCnt].Name[cnCnt] < 0x0f)
+          {
+            Serial.print(F("0"));
+          }
+          Serial.print(glcd1w[glcd1wAddrCnt].Name[cnCnt], HEX);
+          if(cnCnt < chipNameSize - 1)
+          {
+            Serial.print(F(", "));
+          }
+        }
+        Serial.println();
+      }
+      
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Name Updated");
+      sendUDPpacket();
+      break;
+    }
+    
     case displayMessage: // "w"
     {
       /*********************
@@ -2852,7 +4267,9 @@ void udpProcess(void)
         delay(1000);
       }
       
+      digitalWrite(LED1, LOW); // indicate that I2CEEPROM is being accessed
       EEPROMclear();
+
       if(setDebug & resetDebug)
       {
         Serial.println(F("EEPROMclear() completed"));
@@ -2907,6 +4324,8 @@ void udpProcess(void)
         delay(1000);
       }
   
+      digitalWrite(LED1, HIGH); // indicate that I2CEEPROM is being accessed
+
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Resetting");
       sendUDPpacket();
       delay(1000);
@@ -2955,1031 +4374,10 @@ void udpProcess(void)
   cnt = 0;
   serialMessageReady = FALSE;
   udpTimer = 0; // reset udp watchdog
+  if(setDebug & udpProcessLED)
+    digitalWrite(LED3, HIGH); // stop updProcess sync
   KickDog(); // reset Hardware Watchdog
 }
-
-void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
-{
-  char *addrResult = NULL;
-  uint16_t addrResultCnt = 0;
-  
-  addrResult = strtok( result, addrDelim );
-  while(addrResult != NULL)
-  {
-    addrVal[addrResultCnt] = (uint8_t) strtol(addrResult, NULL, 16);
-    
-    if(setDebug & pidDebug)
-    {
-      if(addrVal[addrResultCnt] >= 0 && addrVal[addrResultCnt] <= 9)
-      {
-        Serial.print(F(" 0x0"));
-      }else{
-        Serial.print(F(" 0x"));
-      }
-      Serial.print(addrVal[addrResultCnt], HEX);
-    }
-      
-    addrResultCnt++;
-    addrResult = strtok( NULL, addrDelim );
-   }
-   
-  if(setDebug & pidDebug)
-  {
-    Serial.println();
-  }
-}
-
-
-void actionStatus(int x)
-{
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].actionEnabled);
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-  if(action[x].tempPtr == NULL)
-  {
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-  }else{
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tempPtr->chipStatus);
-  }
-    
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-    
-  if(action[x].tcPtr == NULL)
-  {
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-  }else{
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].tcPtr->chipStatus);
-  }
-
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-
-  if(action[x].thPtr == NULL)
-  {
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","NULL");
-  }else{
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) action[x].thPtr->chipStatus);
-  }   
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooCold);
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",",");
-  rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) action[x].tooHot);
-}
-
-void getAllActionStatus(void)
-{
-  for( int x = 0; x < maxActions; x++ )
-  {
-    actionStatus(x);
-    if( x < (maxActions - 1) )
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s",";");
-    }
-  }
-}
-
-void getPIDStatus(uint8_t x)
-{ 
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d", (int) ePID[x].pidEnabled);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    if(ePID[x].tempPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", charChipAddrArray);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", unassignedStr);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) noChipPresent);
-    }else{
-      showChipAddress((uint8_t *) ePID[x].tempPtr->chipAddr);
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", ePID[x].tempPtr->chipName);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) ePID[x].tempPtr->chipStatus);
-    }
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) ePID[x].pidSetPoint);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    if(ePID[x].switchPtr == NULL)
-    {
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", charChipAddrArray);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", unassignedStr);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) noChipPresent);
-    }else{
-      showChipAddress((uint8_t *) ePID[x].switchPtr->chipAddr);
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", ePID[x].switchPtr->chipName);      
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c" ,' ');
-      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c",(char) ePID[x].switchPtr->chipStatus);
-    }
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%.2f",(double) ePID[x].pidKp);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%.2f",(double) ePID[x].pidKi);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%.2f",(double) ePID[x].pidKd);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",(int) ePID[x].pidDirection);
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%c", ' ');
-    rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%ld",(uint32_t) ePID[x].pidWindowSize);
-}
-
-uint8_t matchChipAddress(uint8_t* array)
-{
-   uint8_t addrMatchCnt, chipAddrCnt;
-   
-  if(setDebug & pidDebug)
-  {
-   Serial.println(F("matchChipAddress"));
-  }
-  
-  for(addrMatchCnt = 0, chipAddrCnt = 0; ((addrMatchCnt < chipAddrSize) || (chipAddrCnt > chipCnt)); addrMatchCnt++)
-  {
-    if(array[addrMatchCnt] != chip[chipAddrCnt].chipAddr[addrMatchCnt])
-    {
-      addrMatchCnt = 0;
-      chipAddrCnt++;
-      
-      if(setDebug & pidDebug)
-      {
-        Serial.println(chipAddrCnt);
-      }
-  
-      continue;
-    }
-    
-    if(setDebug & pidDebug)
-    {
-      Serial.print(array[addrMatchCnt], HEX);
-      Serial.print(F(","));
-    }
-  }
-  
-  if(chipAddrCnt <= chipCnt)
-  {
-    if(setDebug & pidDebug)
-    {
-      Serial.print(F("MATCH!! - "));
-    }
-  }else{
-
-    if(setDebug & pidDebug)
-    {
-      Serial.print(F("NO MATCH!! - "));
-    }
-
-    chipAddrCnt = 0xFF;
-  }
-
-  if(setDebug & pidDebug)
-  {
-    Serial.println(chipAddrCnt);
-  }
-
-  return(chipAddrCnt);
-}
-
-void actionSwitchSet(uint8_t* array, uint8_t setChipState)
-{
-   uint8_t chipAddrCnt;
-
-  chipAddrCnt = matchChipAddress(array);
-  
-  if(chipAddrCnt != 0xFF)
-  {
-    setSwitch(chipAddrCnt, setChipState);
-  }
-}
-
-void showChipAddress( uint8_t* array)
-{
-  if(setDebug & findChipDebug)
-  {
-    Serial.print(F("Chip Address 0x"));
-    Serial.print((uint32_t) array, HEX);
-    Serial.print(F(" = "));
-  }
-  
-  for( int i = 0; i < chipAddrSize; i++)
-  {
-    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s", "0x");    
-    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02X",(uint8_t) array[i]);
-    if(setDebug & findChipDebug)
-    {
-      Serial.print(F("0x"));
-      if( array[i] < 0x10 ) Serial.print(F("0")); 
-      Serial.print((uint8_t) array[i], HEX);
-      if(i < 7)Serial.print(F(","));
-    }
-    if(i < 7)
-    {
-      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s",",");
-    }
-  }
-  if(setDebug & findChipDebug)
-  {
-    Serial.println();
-  }
-  
-}
-
-void showChipType(int x)
-{
-  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s", "0x");    
-  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02X", chip[x].chipAddr[0]);
-  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s"," ");
-  addChipStatus(x);
-}
-
-void showChipInfo(int x)
-{
-  showChipAddress((uint8_t *) &chip[x].chipAddr);
-  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s"," ");
-  addChipStatus(x);
-}
-
-void addChipStatus(int x)
-{
-  switch(chip[x].chipAddr[0])
-  {
-    case ds18b20ID:
-    case ds2762ID:
-    case t3tcID:
-    case max31850ID:
-    {
-      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%d", (int16_t) chip[x].chipStatus);
-      break;
-    }
-    case ds2406ID:
-    {
-      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%c", (int8_t) chip[x].chipStatus);
-      break;
-    }
-    default:
-    {
-      rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%c", 'Z');
-      break;
-    }
-  }
-  rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s"," ");
-  if(chip[x].chipName[0] == 0x00)
-  {
-    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s",unassignedStr);
-  }else{
-    rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%s", chip[x].chipName);
-  }
-}
-
-void setSwitch(uint8_t x, uint8_t setChipState)
-{
-  if(chip[x].chipAddr[0] == 0x12)
-  {
-    ds.reset();
-    ds.select(chip[x].chipAddr);
-    ds.write(ds2406MemWr);
-    ds.write(ds2406AddLow);
-    ds.write(ds2406AddHi);
-    ds.write(setChipState);
-    for ( int i = 0; i < 6; i++)
-    {
-      chipBuffer[i] = ds.read();
-    }
-    ds.write(ds2406End);
-    ds.reset();
-    updateChipStatus(x);
-  }
-}
-
-void updateChipStatus(int x)
-{
-  uint16_t chipCRCval, chipBufferCRC, noCRCmatch =1;
-  
-  digitalWrite(chipStartPin, LOW); //start DSO sync
-
-  switch(chip[x].chipAddr[0])
-  {
-    
-    case ds2762ID:
-    {
-      if(millis() >= chip[x].tempTimer + ds2762UpdateTime)
-      {
-        if(setDebug & ds2762Debug)
-        {
-          startTime = millis();
-          Serial.println(F("Enter Read DS2762 Lookup"));
-        }
-        Read_TC_Volts(x);
-        Read_CJ_Temp(x);
-        cjComp = pgm_read_word_near(kTable + cjTemperature);
-        if(setDebug & ds2762Debug)
-        {
-          Serial.print(F("kTable["));
-          Serial.print(cjTemperature);
-          Serial.print(F("] = "));
-          Serial.println(pgm_read_word_near(kTable + cjTemperature));
-        }
-        if(sign == 1)
-        {
-          if(tcVoltage < cjComp)
-          {
-            cjComp -= tcVoltage;
-          }else{
-            cjComp = 0;
-          }
-        }else{
-          cjComp += tcVoltage;
-        }
-        if(setDebug & ds2762Debug)
-        {
-          Serial.print(F("cjComp = "));
-          Serial.print(cjComp);
-          Serial.println(F(" microvolts"));
-        }
-        tblHi = kTableCnt - 1;
-        TC_Lookup();
-        if(error == 0)
-        {
-          if(setDebug & ds2762Debug)
-          {
-            Serial.print(F("Temp = "));
-            Serial.print(eePntr);
-            Serial.print(F(" degrees C, "));
-            Serial.print(((eePntr * 9) / 5) + 32);
-            Serial.println(F(" degrees F"));
-          }
-          if(showCelsius == TRUE)
-          {
-            chip[x].chipStatus = eePntr;
-          }else{
-            chip[x].chipStatus = ((eePntr * 9) / 5) + 32;
-          }
-        }else{
-          if(setDebug & ds2762Debug)
-          {
-            Serial.println(F("Value Out Of Range"));
-          }
-        }
-        if(setDebug & ds2762Debug)
-        {
-          endTime = millis();
-          Serial.print(F("Exit Read DS2762 Lookup - "));
-          Serial.print(endTime - startTime);
-          Serial.println(F(" milliseconds"));
-          Serial.println();
-          Serial.println();
-        }
-        chip[x].tempTimer = millis() + tempReadDelay;
-      }
-      break;
-    }
-    
-    case ds18b20ID:
-    case t3tcID:
-    case max31850ID:
-    {
-      if(chip[x].tempTimer == 0)
-      {
-        ds.reset();
-        ds.select(chip[x].chipAddr);
-        ds.write(0x4E); // write to scratchpad;
-        ds.write(0x00); // low alarm
-        ds.write(0x00); // high alarm
-        ds.write(0x1F); // configuration register - 9 bit accuracy (0.5deg C)
-        ds.reset();
-        ds.select(chip[x].chipAddr);
-        ds.write(0x44);         // start conversion
-        chip[x].tempTimer = millis();
-      }
-
-      if((chip[x].tempTimer != 0) && (millis() >= chip[x].tempTimer + tempReadDelay))
-      {
-        ds.reset();
-        ds.select(chip[x].chipAddr);    
-        ds.write(0xBE);         // Read Scratchpad
-  
-        for (int i = 0; i < 9; i++) 
-        {
-          chipBuffer[i] = ds.read();
-        }
-        
-        if(ds.crc8(chipBuffer, 8) != chipBuffer[8])
-        {
-          if(setDebug & crcDebug)
-          {
-            Serial.print(F("crc Error chip["));
-            Serial.print(x);
-            Serial.println(F("], resetting timer"));
-          }
-          chip[x].tempTimer = 0; // restart the chip times
-          break; // CRC invalid, try later
-        }
-      // convert the data to actual temperature
-        int raw = (chipBuffer[1] << 8) | chipBuffer[0];
-        if( showCelsius == TRUE)
-        {
-          if(chip[x].chipAddr[0] == 0xAA)
-          {
-            chip[x].chipStatus = raw;
-          }else{
-            chip[x].chipStatus = (int16_t) ((float)raw / 16.0);
-          }
-        }else{
-          if(chip[x].chipAddr[0] == 0xAA)
-          {
-            chip[x].chipStatus = (int16_t) ((((float)raw) * 1.8) + 32.0) ;
-          }else{
-            chip[x].chipStatus = (int16_t) ((((float)raw / 16.0) * 1.8) + 32.0);
-          }
-        }
-        chip[x].tempTimer = 0;
-      }
-      break;
-    }
-    
-    case ds2406ID:
-    {
-      while(noCRCmatch)
-      {
-        ds.reset();
-        ds.select(chip[x].chipAddr);
-        ds.write(ds2406MemRd);
-        chipBuffer[0] = ds2406MemRd;
-        ds.write(0x0); //2406 Addr Low
-        chipBuffer[1] = 0;
-        ds.write(0x0); //2406 Addr Hgh
-        chipBuffer[2] = 0;
-        for(int i = 3; i <  13; i++)
-        {
-          chipBuffer[i] = ds.read();
-        }
-        ds.reset();
-
-        chipCRCval = ~(ds.crc16(chipBuffer, 11)) & 0xFFFF;
-        chipBufferCRC = ((chipBuffer[12] << 8) | chipBuffer[11]) ;
-
-        if(setDebug & chipDebug)
-        {
-          Serial.print(F("chip "));
-          Serial.print(x);
-          Serial.print(F(" chipCRC = 0X"));
-          Serial.print(chipCRCval, HEX);
-          Serial.print(F(", chipBufferCRC = 0X"));
-          Serial.println(chipBufferCRC, HEX);
-        }
-        
-        if(chipBufferCRC == chipCRCval) noCRCmatch = 0;
-        
-        if(chipBuffer[10] & dsPIO_A)
-        {
-          chip[x].chipStatus = switchStatusOFF;
-        }else{
-          chip[x].chipStatus = switchStatusON;
-        }
-      }
-      break;
-    }
-    
-    default:
-    {
-      chip[x].chipStatus = noChipPresent;
-      break; 
-    }
-  }
-  digitalWrite(chipStartPin, HIGH); //stop DSO sync
-}
-
-void updateActions(uint8_t x)
-{
-  uint8_t LCDx, y, tempStrCnt;
-  char tempStr[6];
-  uint32_t lcdUpdateStart, lcdUpdateStop;
-
-  if(action[x].actionEnabled == TRUE)
-  {
-    if(action[x].tempPtr->chipStatus <= action[x].tooCold &&
-       action[x].tcPtr->chipStatus == switchStatusOFF) // too cold
-    {
-      if(action[x].tcDelay == 0 || millis() > (action[x].tcMillis + action[x].tcDelay))
-      {
-        actionSwitchSet((uint8_t *) &action[x].tcPtr->chipAddr, ds2406PIOAon);
-        
-      }
-    }else if(action[x].tempPtr->chipStatus > action[x].tooCold &&
-             action[x].tcPtr->chipStatus == switchStatusON){
-               
-      actionSwitchSet((uint8_t *) &action[x].tcPtr->chipAddr, ds2406PIOAoff);
-      action[x].tcMillis = millis();
-       
-    }
-
-    if(action[x].tempPtr->chipStatus >= action[x].tooHot &&
-       action[x].thPtr->chipStatus == switchStatusOFF) //too hot
-    {
-      if(action[x].thDelay == 0 || millis() > (action[x].thMillis + action[x].thDelay))
-      {
-        actionSwitchSet((uint8_t *) &action[x].thPtr->chipAddr, ds2406PIOAon);
-        
-      }
-    }else if(action[x].tempPtr->chipStatus < action[x].tooHot &&
-             action[x].thPtr->chipStatus == switchStatusON){
-               
-      actionSwitchSet((uint8_t *) &action[x].thPtr->chipAddr, ds2406PIOAoff);
-      action[x].thMillis = millis();
-               
-    }
-    
-    if( (action[x].lcdAddr >= 32 ) &&
-        (action[x].lcdAddr <= 38 ) &&
-        ( (action[x].lcdMillis + lcdUpdateTimer) <= millis())
-      )
-    {
-      if(setDebug & lcdDebug)
-      {
-        lcdUpdateStart = millis();
-      }
-      LCDx = (action[x].lcdAddr - 32);
-//      lcd[LCDx]->clear();
-      lcd[LCDx]->home();
-      lcd[LCDx]->print(F("     Action #"));
-      lcd[LCDx]->print(x);
-      lcd[LCDx]->print(F("      "));
-      lcd[LCDx]->setCursor(0, 1);
-      tempStrCnt = strlen(action[x].tempPtr->chipName);
-      if(setDebug & lcdDebug)
-      {
-        Serial.print(F("tempStrCnt for "));
-        Serial.print(action[x].tempPtr->chipName);
-        Serial.print(F(" is "));
-        Serial.println(tempStrCnt);
-      }
-      lcd[LCDx]->print(action[x].tempPtr->chipName);
-      lcd[LCDx]->setCursor(tempStrCnt, 1);
-      for( y = (tempStrCnt); y < (lcdChars - 5); y++ )
-      {
-        lcd[LCDx]->print(F(" "));
-      }
-      tempStrCnt = sprintf( tempStr, "%d", (int16_t) action[x].tempPtr->chipStatus);
-      if(setDebug & lcdDebug)
-      {
-        Serial.print(F("tempStrCnt for action["));
-        Serial.print(x);
-        Serial.print(F("]tempPtr.->chipStatus"));
-        Serial.print(F(" is "));
-        Serial.print(tempStrCnt);
-        Serial.print(F(" and the chipStatus is "));
-        Serial.println((int16_t) action[x].tempPtr->chipStatus);
-     }
-
-      switch(tempStrCnt)
-      {
-        case 1:
-          {
-            lcd[LCDx]->print(F("    "));            
-            break;
-          }
-        case 2:
-          {
-            lcd[LCDx]->print(F("   "));            
-            break;
-          }
-        case 3:
-          {
-            lcd[LCDx]->print(F("  "));            
-            break;
-          }
-        case 4:
-          {
-            lcd[LCDx]->print(F(" "));            
-            break;
-          }
-      }
-      lcd[LCDx]->print((int16_t) action[x].tempPtr->chipStatus);
-      lcd[LCDx]->setCursor(0, 2);
-      if(action[x].tcPtr != NULL)
-      {
-        tempStrCnt = strlen(action[x].tcPtr->chipName);
-      }else{
-        tempStrCnt= strlen("NOT USED");
-      }
-      if(setDebug & lcdDebug)
-      {
-        if(action[x].tcPtr != NULL)
-        {
-          Serial.print(F("tempStrCnt for "));
-          Serial.print(action[x].tcPtr->chipName);
-          Serial.print(F(" is "));
-          Serial.println(tempStrCnt);
-        }else{
-          Serial.print(F("action["));
-          Serial.print(x);
-          Serial.println(F("].tcPtr->chipName is not used"));
-        }
-      }
-      
-      if(action[x].tcPtr != NULL)
-      {
-        lcd[LCDx]->print(action[x].tcPtr->chipName);
-      }else{
-        lcd[LCDx]->print(F("NOT USED"));
-      }
-
-      lcd[LCDx]->setCursor(tempStrCnt, 2);
-      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
-      {
-        lcd[LCDx]->print(F(" "));
-      }
-      lcd[LCDx]->setCursor(16, 2);
-      if(action[x].tcPtr->chipStatus == 'N')
-      {
-        lcd[LCDx]->print(F(" ON "));
-      }else{
-        lcd[LCDx]->print(F(" OFF"));
-      }
-      
-      lcd[LCDx]->setCursor(0, 3);
-      if(action[x].thPtr != NULL)
-      {
-        tempStrCnt = strlen(action[x].thPtr->chipName);
-      }else{
-        tempStrCnt= strlen("NOT USED");
-      }
-      if(setDebug & lcdDebug)
-      {
-        if(action[x].thPtr != NULL)
-        {
-          Serial.print(F("tempStrCnt for "));
-          Serial.print(action[x].thPtr->chipName);
-          Serial.print(F(" is "));
-          Serial.println(tempStrCnt);
-        }else{
-          Serial.print(F("action["));
-          Serial.print(x);
-          Serial.println(F("].thPtr->chipName is not used"));
-        }
-      }
-      if(action[x].thPtr != NULL)
-      {
-        lcd[LCDx]->print(action[x].thPtr->chipName);
-      }else{
-        lcd[LCDx]->print(F("NOT USED"));
-      }
-      lcd[LCDx]->setCursor(tempStrCnt, 3);
-      for( y = (tempStrCnt - 1); y < (lcdChars - 4); y++ )
-      {
-        lcd[LCDx]->print(F(" "));
-      }
-      lcd[LCDx]->setCursor(16, 3);
-      if(action[x].thPtr->chipStatus == 'N')
-      {
-        lcd[LCDx]->print(F(" ON "));
-      }else{
-        lcd[LCDx]->print(F(" OFF"));
-      }
-      action[x].lcdMillis = millis();
-      
-      if(setDebug & lcdDebug)
-      {
-        lcdUpdateStop = millis();
-        Serial.print(F("lcdupdate took "));
-        Serial.print(lcdUpdateStop - lcdUpdateStart);
-        Serial.println(F(" milliseconds"));
-      }
-
-    }
-  }
-}
-
-void EEPROMclear(void)
-{
-  uint8_t page[pageSize], y;
-  char I2CStr[chipNameSize+1];
-  uint32_t x;
-  lcd[7]->clear();
-  lcd[7]->home();
-  lcd[7]->print(F(" Clearing I2CEEPROM "));
-
-  for(y = 0; y < pageSize; y++) page[y] = 0xff;
-  for(x = 0; x < I2CEEPROMsize; x += pageSize)
-  {
-    I2CEEPROM_writeAnything(x, page, I2C0x50);
-    lcd[7]->setCursor(0, 1);
-    sprintf(I2CStr, "0X%04X", (uint16_t) x);
-    lcdCenterStr(I2CStr);
-    lcd[7]->print(lcdStr);
-    lcd[7]->setCursor(0, 2);
-    lcdCenterStr("Bytes Cleared");
-    lcd[7]->print(lcdStr);
-  }
-  if(setDebug & eepromDebug)
-  {
-    Serial.println(F("Exiting readStructures"));
-    Serial.println(F("Chip Structure"));
-    displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
-    Serial.println(F("Action Structure"));
-    displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
-    Serial.println(F("PID Structure"));
-    displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
-  }
-  lcd[7]->setCursor(0, 3);
-  lcdCenterStr("Finished");
-  lcd[7]->print(lcdStr);
-}
-
-void MasterStop(void)
-{
-  int x;
-// turn off all switches
-  for(x=0; x<maxChips; x++)
-  {
-    setSwitch(x, ds2406PIOAoff);
-  }
-  for(x=0; x<maxActions; x++)
-  {
-    action[x].actionEnabled = FALSE;
-  }
-}
-
-void softReset(void)
-{
-  // 0000101111110100000000000000100
-  // Assert [2]SYSRESETREQ
-  WRITE_RESTART(0x5FA0004);
-}  
-
-
-void Read_TC_Volts(uint8_t x)
-{ 
-  if(setDebug & ds2762Debug)
-  {
-    Serial.println(F("Enter Read_TC_Volts"));
-  }
-  ds.reset();
-  ds.select(chip[x].chipAddr);
-  ds.write(0x69); //read voltage
-  ds.write(0x0e);
-  for (i = 0; i < 2; i++)
-  {
-    voltage[i] = ds.read();
-    if(setDebug & ds2762Debug)
-    {
-      Serial.print(F("voltage["));
-      Serial.print(i);
-      Serial.print(F("] = 0x"));
-      if(voltage[i] < 0x10){Serial.print(F("0"));}
-      Serial.print(voltage[i], HEX);
-      Serial.print(F(" "));
-    }
-  }
-  if(setDebug & ds2762Debug)
-  {
-    Serial.println();
-  }
-  ds.reset();
-  tcVoltage = (voltage[0] << 8) + voltage[1];
-  tcVoltage >>= 3; 
-  if((voltage[0] & 0x80) == 0x80)
-  {
-    sign = 1;
-    tcVoltage |= 0xF000;
-    tcVoltage = ~tcVoltage;
-    tcVoltage += 1;
-  }else{
-    sign = 0;
-  }
-  tcBuff = tcVoltage * 15;
-  tcVoltage *= 5;
-  tcVoltage >>= 3;
-  tcVoltage += tcBuff;
-  
-  if(setDebug & ds2762Debug)
-  {
-    Serial.print(F("tcVoltage = "));
-    Serial.print(tcVoltage);
-    Serial.println(F(" microvolts"));
-    Serial.println(F("Exit Read_TC_Volts"));
-  }
-} 
-
-/* Reads cold junction (device) temperature 
--- each raw bit = 0.125 degrees C 
--- returns tmpCJ in whole degrees C */ 
-void Read_CJ_Temp(uint8_t x)
-{ 
-  if(setDebug & ds2762Debug)
-  {
-    Serial.println(F("Enter Read_CJ_Temp"));
-  }
-  ds.reset();
-  ds.select(chip[x].chipAddr);
-  ds.write(0x69);
-  ds.write(0x18); //read cjTemp
-  for (i = 0; i < 2; i++)
-  {
-    cjTemp[i] = ds.read();
-    if(setDebug & ds2762Debug)
-    {
-      Serial.print(F("cjTemp["));
-      Serial.print(i);
-      Serial.print(F("] = 0x"));
-      if(cjTemp[i] < 0x10){Serial.print(F("0"));}
-      Serial.print(cjTemp[i], HEX);
-      Serial.print(F(" "));
-    }
-  }
-  if(setDebug & ds2762Debug)
-  {
-    Serial.println();
-  }
-  ds.reset();
-  cjTemperature = (cjTemp[0] << 8) + cjTemp[1];
-  if(cjTemperature>=0x8000)
-  { 
-    cjTemperature = 0;
-//    cjdTemperature = 0.0; // disallow negative 
-  }else{
-//    cjdTemperature =  (double) ((double) cjTemperature) * .125;
-    cjTemperature >>= 8;
-  } 
-  if(setDebug & ds2762Debug)
-  {
-    Serial.print(F("cjTemperature = "));
-    Serial.print(cjTemperature);
-    Serial.print(F(" degrees C, "));
-    Serial.print(((cjTemperature * 9) / 5) + 32);
-    Serial.println(F(" degrees F")); 
-    Serial.println(F("Exit Read_CJ_Temp"));
-  }
-} 
-
-/* Search currently selected TC table for nearest entry 
--- uses modified binary algorithm to find cjComp 
--- high end of search set before calling (tblHi) 
--- successful search sets tempC */ 
-void TC_Lookup(void)
-{ 
-  if(setDebug & ds2762Debug)
-  {
-    Serial.println(F("Enter TC_Lookup"));
-  }
-  tblLo=0; // low entry of table 
-  tempC=22; // default to room temp
-  testVal=pgm_read_word_near(kTable + tblHi); // check max temp
-  if(cjComp>testVal)
-  { 
-    error=1; // out of range 
-  }else{ 
-    while(1)
-    { 
-      eePntr=(tblLo+tblHi)/2; // midpoint of search span 
-      testVal=pgm_read_word_near(kTable + eePntr); // read value from midpoint
-      if(setDebug & ds2762Debug)
-      {
-        Serial.print(F("testVal = "));
-        Serial.print(testVal);
-      }
-      if(cjComp == testVal)
-      {
-        if(setDebug & ds2762Debug)
-        {
-          Serial.println(F(" - TC_Lookup Temp Match"));
-        }
-//        tempC = eePntr;
-        return; // found it! 
-      }else{
-        if(cjComp<testVal)
-        {
-          if(setDebug & ds2762Debug)
-          {
-             Serial.println(F(" - testVal too BIG"));
-          }
-         tblHi=eePntr; //search lower half
-        }else{
-          if(setDebug & ds2762Debug)
-          {
-             Serial.println(F(" - testVal too small"));
-          }
-         tblLo=eePntr; // search upper half
-        }
-      }
-      if(setDebug & ds2762Debug)
-      {
-        Serial.print(F("tblHi = "));
-        Serial.print(tblHi);
-        Serial.print(F(", tblLo = "));
-        Serial.println(tblLo);
-      }
-      if((tblHi-tblLo)<2)
-      { // span at minimum 
-        if(setDebug & ds2762Debug)
-        {
-          Serial.println(F("TC_Lookup Temp Span At Minimum"));
-        }
-        eePntr=tblLo; 
-        return; 
-      } 
-    } 
-  }
-}
-
-void lcdCenterStr(char *str)
-{
-  uint8_t lcdPad;
-  for(uint x=0; x<lcdChars; x++) lcdStr[x] = 0x20; // fill lcdStr with spaces
-  
-  if(strlen(str) > lcdChars+1)
-  {
-    strcpy(lcdStr, "  ERROR - TOO LONG  ");
-    if(setDebug & lcdDebug)
-    {
-      Serial.println(F("String was too long for the LCD display"));
-    }
-  }else if(strlen(str) == lcdChars+1){
-    strcpy(lcdStr, str);
-    if(setDebug & lcdDebug)
-    {
-      Serial.println(F("String was exactly right for the LCD display"));
-    }
-  }else{
-    
-    if(setDebug & lcdDebug)
-    {
-      Serial.print(F("Input String = "));
-      Serial.println(str);
-      Serial.print(F("strlen(str) = "));
-      Serial.print(strlen(str));
-      Serial.println(F(" bytes"));
-    }
-
-    lcdPad = (lcdChars - strlen(str)) / 2;
-    if(setDebug & lcdDebug)
-    {
-      Serial.print(F("lcdPad = "));
-      Serial.println(lcdPad);
-    }
-
-    memcpy(&lcdStr[lcdPad], str, strlen(str));
-    if(setDebug & lcdDebug)
-    {
-      Serial.println(F("String was smaller than the LCD Display"));
-      Serial.print(F("lcdStr = \""));
-      Serial.print(lcdStr);
-      Serial.println(F("\""));
-    }
-  }
-}
-
-void checkMasterStop(void)
-{
-  if(setDebug & resetDebug)
-  { 
-    Serial.println(F("Checking Master Stop"));
-  }
-  elapsedMillis MSTimer = 0;
-  while(digitalRead(hwMasterStopPin) == LOW)
-  {
-    if(MSTimer >= 1000)
-    {
-      if(setDebug & resetDebug)
-      { 
-        Serial.println(F("Executing Master Stop"));
-      }
-      MasterStop();
-      break;
-    }
-  }
-}
-
-void checkForReset(void)
-{
-  if(setDebug & resetDebug)
-  { 
-    Serial.println(F("Checking Reset"));
-  }
-  elapsedMillis resetTimer = 0;
-  while(digitalRead(chipResetPin) == LOW)
-  {
-    if(resetTimer >= 1000)
-    {
-      if(setDebug & resetDebug)
-      { 
-        Serial.println(F("Executing Reset"));
-      }
-      MasterStop();
-      softReset();
-      break;
-    }
-  }
-}
-
-void KickDog(void)
-{
-  Serial.println("Kicking the dog!");
-  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  noInterrupts();
-  WDOG_REFRESH = 0xA602;
-  WDOG_REFRESH = 0xB480;
-  interrupts();
-}
-
 
 #ifdef __cplusplus
 extern "C" {

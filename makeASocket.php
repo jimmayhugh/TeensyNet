@@ -25,7 +25,17 @@ $getPidArray        = "N";
 $setPidArray        = "O";
 $useDebug           = "P";
 $restoreStructures  = "Q";
+$shortShowChip      = "R";
+$updateChipName     = "S";
+$showActionStatus   = "T";
+$setAction          = "U";
+$getMaxGLCDs        = "V";
+$getGLCDcnt         = "W";
+$getGLCDstatus      = "X";
+$setGLCD            = "Y";
 
+$displayMessage     = "w";
+$clearAndReset      = "x";
 $clearEEPROM        = "y";
 $versionID          = "z";
 

@@ -5,13 +5,30 @@
   include_once("accessDatabase.php");
   include_once("header.html");
 
-  $chipAddrIndex    = 0;
-  $chipIdIndex      = 0;
-  $chipDataIndex    = 1;
-  $chipNameIndex    = 2;
+  $glcdNameIndex    =  0;
+  $glcdFlagIndex    =  1;
+  $glcdAction0Index =  2;
+  $glcdAction1Index =  3;
+  $glcdAction2Index =  4;
+  $glcdAction3Index =  5;
+  $glcdTemp0Index   =  6;
+  $glcdTemp1Index   =  7;
+  $glcdTemp2Index   =  8;
+  $glcdTemp3Index   =  9;
+  $glcdTemp4Index   = 10;
+  $glcdTemp5Index   = 11;
+  $glcdTemp6Index   = 12;
+  $glcdTemp7Index   = 13;
+  $glcdAddrIndex    = 14;
+  
+  $glcdIdIndex = 0;
  
+  $glcdAddrStr = "";
+  $maxGLCDCnt = 0;
+  
   $tempAddrStr = "";
-  $switchAddrStr = ""; 
+  $result = "";
+  $debugStr = "";
 
   if( (isset($_POST["netID"]) && $_POST["netID"] >= 0) || (isset($_GET["netID"]) && $_GET["netID"] >= 0) )
   {
@@ -47,7 +64,7 @@
       </script>";
   }
 
-  $h2Header = "<font color=\"blue\">$netName<br />Update Chip Names</font>";
+  $h2Header = "<font color=\"blue\">$netName<br />Update GLCD Names</font>";
   
   if(isset($_POST["devupdate"]) && $_POST["devupdate"] === "devupdate")
   {
@@ -62,13 +79,13 @@
   {
     $h2Header="<font color=\"red\">".$netName." Names Updated</font>";
     $totalUpdated = 0;
-    $maxChipCnt = $_POST["maxChipCnt"];
-    $debugStr .= "\$maxChipCnt =  $maxChipCnt<br />";
-    for($updateCnt=0; $updateCnt<$_POST["maxChipCnt"]; $updateCnt++)
+    $maxGLCDCnt = $_POST["maxGLCDCnt"];
+    $debugStr .= "\$maxGLCDCnt =  $maxGLCDCnt<br />";
+    for($updateCnt=0; $updateCnt<$_POST["maxGLCDCnt"]; $updateCnt++)
     {
-      $chipAddress = $_POST["address$updateCnt"];
-      $chipNameStr = $_POST["name$updateCnt"];
-      $query = "SELECT * from `chipNames` where `address`='".$chipAddress."' AND `netID`='".$netID."'";
+      $glcdAddress = $_POST["address$updateCnt"];
+      $glcdNameStr = $_POST["name$updateCnt"];
+      $query = "SELECT * from `glcdNames` where `address`='".$glcdAddress."' AND `netID`='".$netID."'";
 //      echo $query."<br />";
       $result = mysqli_query($link,$query);
 
@@ -83,21 +100,21 @@
       $resultCnt = mysqli_num_rows($result);
 //      echo "\$resultCnt = ".$resultCnt."<br />";
       mysqli_free_result($result);
-      $chipNameStr = str_replace(" ","_",$chipNameStr);
-      $chipNameStr = str_replace(",","_",$chipNameStr);
-      $chipNameStr = str_replace(";","_",$chipNameStr);
-      $escapedName = mysqli_real_escape_string ($link , $chipNameStr);
+      $glcdNameStr = str_replace(" ","_",$glcdNameStr);
+      $glcdNameStr = str_replace(",","_",$glcdNameStr);
+      $glcdNameStr = str_replace(";","_",$glcdNameStr);
+      $escapedName = mysqli_real_escape_string ($link , $glcdNameStr);
       $debugStr .= "\$escapedName = $escapedName <br />";
       if($resultCnt > 0)
       {
-        $query = "UPDATE `chipNames` SET `id`='".$updateCnt."',`name`='".$escapedName."' WHERE `address`='".$chipAddress."' AND `netID`='".$netID."'";
+        $query = "UPDATE `glcdNames` SET `id`='".$updateCnt."',`name`='".$escapedName."' WHERE `address`='".$glcdAddress."' AND `netID`='".$netID."'";
       }else{
-        $query = "INSERT INTO `chipNames` SET `id`='".$updateCnt."',`netID`='".$netID."',`address`='".$chipAddress."',`name`='".$escapedName."'";
+        $query = "INSERT INTO `glcdNames` SET `id`='".$updateCnt."',`netID`='".$netID."',`address`='".$glcdAddress."',`name`='".$escapedName."'";
       }
       $trimmedEscapedName = trim($escapedName);
       $debugStr .= "\$escapedName = $trimmedEscapedName <br />";
       
-      if($trimmedEscapedName !== "_____UNASSIGNED_____")
+      if($trimmedEscapedName !== "NULL")
       {
         $debugStr .= "\$query = $query<br />";
 
@@ -109,7 +126,7 @@
         }else{
           $debugStr .= "name update success<br />";
         }
-        $in = $updateChipName." ".$chipAddress." ".$chipNameStr;
+        $in = $updateglcd1wName." ".$glcdAddress." ".$glcdNameStr;
         $result = udpRequest($service_port, $port_address, $in);
         $debugStr .= "\$result = $result<br />";
         $totalUpdated++;
@@ -144,9 +161,9 @@
             <tr>
               <td align=\"center\" colspan=\"2\" border=\"2\">
                 <h2>".$h2Header."</h2>
-                  <form method=\"post\" action=\"UpdateNames.php\">
+                  <form method=\"post\" action=\"updateGLCDnames.php\">
                     <input type=\"hidden\" name=\"devupdate\" value=\"devupdate\">
-                    <input type=\"hidden\" name=\"maxChipCnt\" value=\"".$maxChipCnt."\">
+                    <input type=\"hidden\" name=\"maxGLCDCnt\" value=\"".$maxGLCDCnt."\">
                     <input type=\"hidden\" name=\"netID\" value=\"".$netID."\">
                     <input type=\"text\" size=\"20\" maxlength=\"20\" name=\"netName\" value=\"".$netName."\">
                     <input type=\"hidden\" name=\"service_port\" value=\"".$service_port."\">
@@ -159,14 +176,15 @@
             <tr>
               <td align=\"center\">";
             
-            $in = "$getChipCount\n";
+            $in = "$getGLCDcnt\n";
             $out = udpRequest($service_port, $port_address, $in);
 
-            $maxChipCnt = trim($out);
+            $maxGLCDCnt = trim($out);
+//            echo "<br /> maxGLCDCnt = $maxGLCDCnt <br />";
             echo "<br />
-                  <form method=\"post\" action=\"UpdateNames.php\">
+                  <form method=\"post\" action=\"updateGLCDnames.php\">
                     <input type=\"hidden\" name=\"update\" value=\"update\">
-                    <input type=\"hidden\" name=\"maxChipCnt\" value=\"".$maxChipCnt."\">
+                    <input type=\"hidden\" name=\"maxGLCDCnt\" value=\"".$maxGLCDCnt."\">
                     <input type=\"hidden\" name=\"netID\" value=\"".$netID."\">
                     <input type=\"hidden\" name=\"netName\" value=\"".$netName."\">
                     <input type=\"hidden\" name=\"service_port\" value=\"".$service_port."\">
@@ -174,7 +192,7 @@
                     <table border=\"2\" cellpadding=\"2\" cellspacing=\"2\">
                     <tr>
                       <td align=\"center\" colspan=\"2\"><font size=\"5\"><strong>There are ".$out."
-                        arrays that have a chip installed.</strong></font></td>
+                        GLCD(s) installed.</strong></font></td>
                     </tr>
                     <tr>
                       <td colspan=\"2\"align=\"center\">
@@ -185,19 +203,28 @@
                         <input type=\"submit\" value=\"SUBMIT\">
                       </td>
                     </tr>";
-            for($scCnt=0; $scCnt < $maxChipCnt; $scCnt++)
+            for($scCnt=0; $scCnt < $maxGLCDCnt; $scCnt++)
             {
-              $in = $showChip.$scCnt."\n";
+              $in = $getGLCDstatus.$scCnt."\n";
               $out = udpRequest($service_port, $port_address, $in);
-              $chipArray = explode(" ", $out);
-              $chipAddressArray = explode(",", $chipArray[$chipAddrIndex]);
-//              echo "chipAddress = $chipArray[$chipAddrIndex]<br />";
-              $chipID = $chipAddressArray[$chipIdIndex];
-              $chipName = $chipArray[$chipNameIndex];
-//              echo "chipName = $chipName<br />";
-              if(trim($chipName) === "_____UNASSIGNED_____")
+              $glcdArray = explode(",", $out);
+              $glcdAddressArray = explode(";", $glcdArray[$glcdAddrIndex]);
+              $glcdAddrArrayStr = "";
+              for( $addrCnt = 0; $addrCnt < 8; $addrCnt++)
               {
-                $query = "SELECT name FROM chipNames WHERE `address`='$chipArray[$chipAddrIndex]' AND `netID`='$netID'";
+                $glcdAddrArrayStr .= "0x$glcdAddressArray[$addrCnt]";
+                if($addrCnt < 7)
+                {
+                  $glcdAddrArrayStr .= ",";
+                }
+              }
+//              echo "chipAddress = $glcdAddrArrayStr<br />";
+              $glcdID = $glcdAddressArray[$glcdIdIndex];
+              $glcdName = $glcdArray[$glcdNameIndex];
+//              echo "chipName = $glcdName<br />";
+              if(trim($glcdName) === "NULL")
+              {
+                $query = "SELECT name FROM glcdNames WHERE `address`='$glcdArray[$glcdAddrIndex]' AND `netID`='$netID'";
 //                echo "\$query = $query<br />";
                 $result = mysqli_query($link, $query);
                 $rowCnt = mysqli_num_rows($result);
@@ -206,41 +233,27 @@
                 {
 //                    echo "name query success, name = ";
                   $resultObj = mysqli_fetch_object($result);
-                  $chipName = $resultObj->name;
-//                    echo $resultObj->name."<br />";
+                  $glcdName = $resultObj->name;
+                    echo $resultObj->name."<br />";
                 }else{
 //                    echo "name query failed<br />";
                 }
               }
                 
-              mysqli_free_result($result);
+                mysqli_free_result($result);
               
-              if( ($chipID === "0x28") || 
-                  ($chipID === "0x3B") || 
-                  ($chipID === "0x30") || 
-                  ($chipID === "0xAA")
-                )
+              if( ($glcdID === "45") )
               {
                 $tempAddrStr .=  "
                   <tr>
                     <td align=\"center\">
-                      ".$chipArray[$chipAddrIndex]."
-                      <input type=\"hidden\" name=\"address".$scCnt."\" value=\"".$chipArray[$chipAddrIndex]."\">
+                      ".$glcdAddrArrayStr."
+                      <input type=\"hidden\" name=\"address".$scCnt."\" value=\"".$glcdAddrArrayStr."\">
                     </td>
                     <td align=\"center\">
-                      <input type=\"text\" size=\"25\" name=\"name".$scCnt."\" value=\"".$chipName."\">
+                      <input type=\"text\" size=\"25\" name=\"name".$scCnt."\" value=\"".$glcdName."\">
                     </td>
                   </tr>";
-              }elseif($chipAddressArray[$chipIdIndex] == "0x12"){
-                $switchAddrStr .=  "  <tr>
-                  <td align=\"center\">
-                    ".$chipArray[$chipAddrIndex]."
-                     <input type=\"hidden\" name=\"address".$scCnt."\" value=\"".$chipArray[$chipAddrIndex]."\">
-                  </td>
-                  <td align=\"center\">
-                    <input type=\"text\" size=\"25\" name=\"name".$scCnt."\" value=\"".$chipName."\">
-                  </td>
-                </tr>";
               }
             }
             echo "<tr>
@@ -253,25 +266,12 @@
                 <td>
                   <table border=\"2\">
                     <tr>
-                      <td align=\"center\"><font size=\"5\"><strong>Temperature Address</strong></font></td>
+                      <td align=\"center\"><font size=\"5\"><strong>GLCD Address</strong></font></td>
                       <td align=\"center\"><font size=\"5\"><strong>Name</strong></font></td>
                     </tr>
                     ".$tempAddrStr."
                   </table>  
                 </td>";
-              }
-              if($switchAddrStr != "")
-              {            
-                echo"
-                  <td>
-                    <table border=\"2\">
-                      <tr>
-                        <td align=\"center\"><font size=\"5\"><strong>Switch Address</strong></font></td>
-                        <td align=\"center\"><font size=\"5\"><strong>Name</strong></font></td>
-                      </tr>
-                       ".$switchAddrStr."
-                     </table>
-                   </td>";
               }
               echo"
                 </tr>

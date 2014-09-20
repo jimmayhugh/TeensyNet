@@ -29,7 +29,15 @@ $shortShowChip      = "R";
 $updateChipName     = "S";
 $showActionStatus   = "T";
 $setAction          = "U";
+$getMaxGLCDs        = "V";
+$getGLCDcnt         = "W";
+$getGLCDstatus      = "X";
+$setGLCD            = "Y";
+$getStructAddr      = "Z";
 
+$updateglcd1wName   = "a";
+
+$displayMessage     = "w";
 $clearAndReset      = "x";
 $clearEEPROM        = "y";
 $versionID          = "z";
