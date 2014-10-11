@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.40
-Last Modified 09/20/2014
+Version 0.0.43
+Last Modified 10/10/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -93,6 +93,8 @@ with
 
 *********************/
 
+#define USEVGAONLY 1 // if set to 1, use VGA Values ONLY, otherwise use VGA or RGB
+
 #include <PID_v1.h>
 #include <math.h>
 #include <EEPROM.h>
@@ -109,6 +111,7 @@ with
 #include <FastWire.h>
 #include <Teensy_MCP23017.h>
 #include <Teensy_RGBLCDShield.h>
+#include <TeensyNetGLCD.h> // TeensyGLCD structures and commands
 #include <I2CEEPROMAnything.h>
 #include <TeensyNetFuncProt.h> // function prototype list
 #include <TeensyDebug.h>
@@ -123,7 +126,6 @@ with
 #include <TeensyDS2762.h>
 #include <TeensyTestPoints.h>
 #include <TeensyVersionInfo.h>
-#include <TeensyNetGLCD.h> // TeensyGLCD structures and commands
 
 /*
   General Setup
@@ -382,11 +384,14 @@ void setup()
   
   for(uint8_t q = 0; q < maxGLCDs; q++)
   {
+/*
     glcd1w[q].Item     = 0; // reset glcd display items
     glcd1w[q].Position = 0;
     glcd1w[q].Page     = 0;
+*/
+    resetGLCDdisplay(q);
    
-    if(glcd1w[q].Addr[0] == 0x45)
+/*    if(glcd1w[q].Addr[0] == 0x45)
     {
       if(setDebug & glcdSerialDebug)
       {
@@ -394,7 +399,7 @@ void setup()
         Serial.print(q);
         Serial.println(F(" TeensyNet"));
       }
-      sendCommand(dsDevice, q, setResetTeensy, 0,0,0,0,0,0,"",0,0,0,0,0,1); //initialize to landscape mode
+      sendCommand(dsDevice, q, setResetDisplay, 0,0,0,0,0,0,"",0,0,0,0,0,1); //reset the GLCD Display
       delay(2000);
       sendCommand(dsDevice, q, setInitL, 0,0,0,0,0,0,"",0,0,0,0,0,1); //initialize to landscape mode
       for(uint8_t x = 0; x < 8; x++)
@@ -403,6 +408,8 @@ void setup()
         delay(100);
         sendCommand(dsDevice, q, clrScn, 0,0,0,0,0,0,"",0,0,0,0,0,1); // clear the page
         delay(100);
+        sendCommand(dsDevice, q, setPageDisplay, 0,0,0,x,0,0,"",0,0,0,0,0,1); // display the page
+        delay(100);
         if(setDebug & glcdSerialDebug)
         {
           Serial.print(F("Initializing GLCD "));
@@ -410,13 +417,13 @@ void setup()
           Serial.print(F(", Page "));
           Serial.println(x);
         }
-        sendCommand(dsDevice, q, setPageDisplay, 0,0,0,x,0,0,"",0,0,0,0,0,1); // display the page
-        delay(100);
+        sprintf(displayStr, "GLCD %d, Page %d Initialized", q, x);
+        sendCommand(dsDevice, q, (setPrintStr | setFont | setColorVGA), UBUNTUBOLD,0,WHITE,0,0,0,displayStr,0,0,0,0,0,1); // clear the page
+        delay(1000);
       }
-      sprintf(displayStr, "GLCD %d Initialized", q);
-      sendCommand(dsDevice, q, (setPrintStr | setFont | setColorVGA), UBUNTUBOLD,0,WHITE,0,0,0,displayStr,0,0,0,0,0,1); // clear the page
       delay(100);
     }
+*/
   }
 }
 
@@ -985,8 +992,12 @@ char switchStr[7] = "UNUSED";
                 {
                   Serial.print(F("Placing Filled Rectangle"));
                 }
-                if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus <= glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tooCold)
+                if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                    (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr == NULL)
+                  )
                 {
+                  color = YELLOW;
+                }else if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus <= glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tooCold){
                   color = BLUE;
                 }else if(glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus >= glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tooHot){
                   color = RED;
@@ -1033,7 +1044,14 @@ char switchStr[7] = "UNUSED";
 
               case glcdPrintTemp:
               {
-                sprintf(tempStr, "%4d""%c", glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus, '.');
+                if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
+                    (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr == NULL)
+                  )
+                {
+                  sprintf(tempStr, "%s", "------");
+                }else{
+                  sprintf(tempStr, "%4d""%c", glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr->chipStatus, '.');
+                }
                 lcdCenterStr(tempStr, 6);
                 sprintf(tempStr, "%s", lcdStr);
                 sendCommand(dsDevice, glcdCnt, (setColorVGA | setPrintStrXY | setFont),  action2x2[glcd1w[glcdCnt].Position].vFont,
@@ -4165,6 +4183,16 @@ void udpProcess(void)
       break;
     }
     
+
+  case resetGLCD:
+    {
+      x = atoi((char *) &PacketBuffer[1]);
+      resetGLCDdisplay(x);
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s%d Reset","GLCD", x);
+      sendUDPpacket();
+      break;
+    }
+
     case displayMessage: // "w"
     {
       /*********************
@@ -4377,6 +4405,44 @@ void udpProcess(void)
   if(setDebug & udpProcessLED)
     digitalWrite(LED3, HIGH); // stop updProcess sync
   KickDog(); // reset Hardware Watchdog
+}
+
+void resetGLCDdisplay(uint8_t q)
+{
+  if(glcd1w[q].Addr[0] == 0x45)
+  {
+    glcd1w[q].Item     = 0; // reset glcd display items
+    glcd1w[q].Position = 0;
+    glcd1w[q].Page     = 0;
+    if(setDebug & glcdSerialDebug)
+    {
+      Serial.print(F("Resetting GLCD "));
+      Serial.print(q);
+      Serial.println(F(" TeensyNet"));
+    }
+    sendCommand(dsDevice, q, setResetDisplay, 0,0,0,0,0,0,"",0,0,0,0,0,1); //reset the GLCD Display
+    delay(2000);
+    sendCommand(dsDevice, q, setInitL, 0,0,0,0,0,0,"",0,0,0,0,0,1); //initialize to landscape mode
+    for(uint8_t x = 0; x < 8; x++)
+    {
+      sendCommand(dsDevice, q, setPageWrite, 0,0,0,x,0,0,"",0,0,0,0,0,1); // select page to write to       
+      delay(100);
+      sendCommand(dsDevice, q, clrScn, 0,0,0,0,0,0,"",0,0,0,0,0,1); // clear the page
+      delay(100);
+      sendCommand(dsDevice, q, setPageDisplay, 0,0,0,x,0,0,"",0,0,0,0,0,1); // display the page
+      delay(100);
+      if(setDebug & glcdSerialDebug)
+      {
+        Serial.print(F("Initializing GLCD "));
+        Serial.print(q);
+        Serial.print(F(", Page "));
+        Serial.println(x);
+      }
+      sprintf(displayStr, "GLCD %d, Page %d Initialized", q, x);
+      sendCommand(dsDevice, q, (setPrintStr | setFont | setColorVGA), UBUNTUBOLD,0,WHITE,0,0,0,displayStr,0,0,0,0,0,1); // clear the page
+      delay(1000);
+    }
+  }
 }
 
 #ifdef __cplusplus
