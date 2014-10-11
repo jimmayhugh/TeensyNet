@@ -1,8 +1,8 @@
 TeensyNet is a networked 1-Wire Controller.
 
-The main board consists of a Teensy 3.0 Cortex ARM mini-board, a choice of WIZ812mj, WIZ820io, or CC3000 mini nics, and 3v3 to 5v0 buffers. Each TeensyNet can control up to 12 discrete 1-wire devices, currently DS18B20 digital thermometers and DS2406+ digital switches.
+The main board consists of a Teensy 3.x Cortex ARM mini-board, a WIZ820io mini nic, and 3v3 to 5v level converters. Each TeensyNet can control multiple discrete 1-wire devices, including DS18B20 digital thermometers, MAX31850 K-Type Thermocouple monitors, graphical LCDs, character-based LCDs and DS2406+ digital switches.
 
-There are up to 4 "Actions", that can consist of 1 DS18B20 and 2 DS2406+ devices. The DS2406 devices can be turned on or off based on the value returned by the DS18B20. A timed delay may also be set for each switch action.
+There are up to 4 "Actions", that can consist of a 1-wire thermometer or thermocouple and 2 DS2406+ devices. The DS2406 devices can be turned on or off based on the value returned by the temperature-sensing device. A timed delay may also be set for each switch action.
 
 There are also 4 available PID controls that can be used with 1 DS18B20 and 1 DS2406+.
 
