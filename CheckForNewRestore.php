@@ -63,6 +63,16 @@
               }
               mysqli_free_result($result);
               
+              $query = "SELECT * FROM glcdNames WHERE `netID`='$netID'";
+              $result=mysqli_query($link,$query);
+              while($nameObj = mysqli_fetch_object($result))
+              {
+                $in = $updateglcd1wName." ".$nameObj->address." ".$nameObj->name."\n";
+//                echo $in."<br />";
+		            $out = udpRequest($service_port, $port_address, $in);                
+              }
+              mysqli_free_result($result);
+              
               $query = "SELECT * FROM action WHERE `netID`=$netID";
               // echo "query = ".$query."<br />";
               $result=mysqli_query($link,$query);

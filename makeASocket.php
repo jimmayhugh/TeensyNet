@@ -33,6 +33,10 @@ $getMaxGLCDs        = "V";
 $getGLCDcnt         = "W";
 $getGLCDstatus      = "X";
 $setGLCD            = "Y";
+$getStructAddr      = "Z";
+
+$updateglcd1wName   = "a";
+$resetGLCD          = "b";
 
 $displayMessage     = "w";
 $clearAndReset      = "x";
