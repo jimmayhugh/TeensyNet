@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.43
-Last Modified 10/10/2014
+Version 0.0.45
+Last Modified 10/17/2014
 By Jim Mayhugh
 
 Uses the 24LC512 EEPROM for structure storage, and Teensy 3.1 board
@@ -36,7 +36,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *********************/
 
 /*********************
-This code requires several changes in several libraries to work properly. This is due primarily to the limited amount of
+This code requires a change in the EthernetUDP.h library file to work properly. This is due primarily to the limited amount of
 RAM that's available in the Arduino series versus the Teensy.
 
 ------------------------------------------
@@ -47,53 +47,16 @@ replace:
 
 with:
 
+#if defined(__MK20DX256__) || defined(__MK20DX128__)
 #define UDP_TX_PACKET_MAX_SIZE 2048
-
-------------------------------------------
-
-------------------------------------------
-/arduino/libraries/Wire/Wire.cpp:
-in the function TwoWire::begin(void);
-replace:
-
-#if F_BUS == 48000000
-	I2C0_F = 0x27;	// 100 kHz
-	// I2C0_F = 0x1A; // 400 kHz
-	// I2C0_F = 0x0D; // 1 MHz
-	I2C0_FLT = 4;
-#elif F_BUS == 24000000
-	I2C0_F = 0x1F; // 100 kHz
-	// I2C0_F = 0x45; // 400 kHz
-	// I2C0_F = 0x02; // 1 MHz
-	I2C0_FLT = 2;
-
-with:
-
-#if F_BUS == 48000000
-	//I2C0_F = 0x27;	// 100 kHz
-	I2C0_F = 0x1A; // 400 kHz
-	// I2C0_F = 0x0D; // 1 MHz
-	I2C0_FLT = 4;
-#elif F_BUS == 24000000
-	// I2C0_F = 0x1F; // 100 kHz
-	I2C0_F = 0x45; // 400 kHz
-	// I2C0_F = 0x02; // 1 MHz
-	I2C0_FLT = 2;
-
-
-/arduino/libraries/Wire/Wire.h
-replace
-
-#define BUFFER_LENGTH 32
-
-with
-
-#define BUFFER_LENGTH 130
-
+#else
+#define UDP_TX_PACKET_MAX_SIZE 24
+#endif
 
 *********************/
 
 #define USEVGAONLY 1 // if set to 1, use VGA Values ONLY, otherwise use VGA or RGB
+#define USESERIAL2 1 // if set to 1, use Serial2 with FTDI for debugging
 
 #include <PID_v1.h>
 #include <math.h>
@@ -149,6 +112,7 @@ const uint8_t w5200ResetPin    = 9;
 
 OneWire  ds(oneWireAddress);
 
+
 void setup()
 {
   int x;
@@ -166,6 +130,17 @@ void setup()
 
 
   Serial.begin(baudRate);
+#if USESERIAL2 == 1
+  // reassign pins 26 and 31 to use the ALT3 configuration
+  // which makes them  Serial port 2 Rx(26) and Tx(31)
+  CORE_PIN26_CONFIG = PORT_PCR_MUX(3);
+  CORE_PIN31_CONFIG = PORT_PCR_MUX(3);
+  Serial2.begin(baudRate);
+  Stream &myDebug = Serial2;
+#else
+  Stream &myDebug = Serial;
+#endif
+
   
   pinMode(hwMasterStopPin, INPUT_PULLUP); // set to monitor Master Stop switch
   pinMode(chipResetPin, INPUT_PULLUP); // set to monitor Reset switch
@@ -177,7 +152,12 @@ void setup()
   Serial.println(F(" baud"));
   Serial.print(F("UDP_TX_PACKET_MAX_SIZE = "));
   Serial.println(UDP_TX_PACKET_MAX_SIZE);
-  
+
+  myDebug.print(F("Serial Debug starting at "));
+  myDebug.print(baudRate);
+  myDebug.println(F(" baud"));
+  myDebug.print(F("UDP_TX_PACKET_MAX_SIZE = "));
+  myDebug.println(UDP_TX_PACKET_MAX_SIZE);
 
   for(x = 0; x < numLCDs; x++)
   {
@@ -194,22 +174,38 @@ void setup()
 
   delay(3000);
 
+#if !defined(STATIC_IP)
   I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
-  
+
   if(setDebug & eepromDebug)
   { 
-    Serial.print(F("i2cEeResult = 0x"));
-    Serial.println(i2cEeResult, HEX);
+    myDebug.print(F("i2cEeResult = 0x"));
+    myDebug.println(i2cEeResult, HEX);
   }
   
+  I2CEEPROM_readAnything(I2CEEPROMipAddr, i2cIPResult, I2C0x50);
+  
+//  if(setDebug & eepromDebug)
+//  { 
+    myDebug.print(F("i2cipResult = "));
+    myDebug.print(i2cIPResult[0]);
+    myDebug.print(F(","));
+    myDebug.print(i2cIPResult[1]);
+    myDebug.print(F(","));
+    myDebug.print(i2cIPResult[2]);
+    myDebug.print(F(","));
+    myDebug.println(i2cIPResult[3]);
+//  }
+#endif // STATIC_IP
+
   I2CEEPROM_readAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
   
   if(bonjourNameBuf[0] >= 0x20 && bonjourNameBuf[0] <= 0x7a)
   { 
     if(setDebug & eepromDebug)
     { 
-      Serial.print(F("bonjourNameBuf = "));
-      Serial.println(bonjourNameBuf);
+      myDebug.print(F("bonjourNameBuf = "));
+      myDebug.println(bonjourNameBuf);
     }
   }else{
     for(int x = 0; x < chipNameSize; x++)
@@ -218,7 +214,7 @@ void setup()
     }
     if(setDebug & eepromDebug)
     { 
-      Serial.println(F("bonjourNameBuf Cleared"));
+      myDebug.println(F("bonjourNameBuf Cleared"));
     }
   }
 
@@ -229,7 +225,7 @@ void setup()
   {
     if(setDebug & eepromDebug)
     { 
-       Serial.println(F("No I2CEEPROM Data"));
+       myDebug.println(F("No I2CEEPROM Data"));
     }
 
     lcd[7]->print(F(" No I2CEEPROM Data  "));
@@ -241,7 +237,7 @@ void setup()
 
     if(setDebug & eepromDebug)
     { 
-      Serial.println(F("Getting EEPROM Data"));
+      myDebug.println(F("Getting EEPROM Data"));
     }
 
     lcd[7]->print(F("Valid I2CEEPROM Data"));
@@ -250,14 +246,14 @@ void setup()
     
     if(setDebug & eepromDebug)
     { 
-      Serial.print(F("chipCnt at I2CEEPROMccAddr =  "));
-      Serial.println(chipCnt);
+      myDebug.print(F("chipCnt at I2CEEPROMccAddr =  "));
+      myDebug.println(chipCnt);
     }
 
     readStructures();
     if(setDebug & eepromDebug)
     { 
-      Serial.println(F("I2CEEPROM Data Read Completed"));
+      myDebug.println(F("I2CEEPROM Data Read Completed"));
     }
 
     lcd[7]->setCursor(0, 3);
@@ -269,21 +265,21 @@ void setup()
   
   if(setDebug & eepromDebug)
   { 
-    Serial.print( (sizeof(chipStruct) / sizeof(byte) ) * maxChips);
-    Serial.println(F(" bytes in chip structure array"));
-    Serial.print( (sizeof(glcd1wStruct) / sizeof(byte) ) * maxGLCDs);
-    Serial.println(F(" bytes in glcd structure array"));
-    Serial.print( (sizeof(chipActionStruct) / sizeof(byte) ) *maxActions);
-    Serial.println(F(" bytes in action structure array"));
-    Serial.print( (sizeof(chipPIDStruct) / sizeof(byte) ) *maxPIDs);
-    Serial.println(F(" bytes in pid structure Array"));
+    myDebug.print( (sizeof(chipStruct) / sizeof(byte) ) * maxChips);
+    myDebug.println(F(" bytes in chip structure array"));
+    myDebug.print( (sizeof(glcd1wStruct) / sizeof(byte) ) * maxGLCDs);
+    myDebug.println(F(" bytes in glcd structure array"));
+    myDebug.print( (sizeof(chipActionStruct) / sizeof(byte) ) *maxActions);
+    myDebug.println(F(" bytes in action structure array"));
+    myDebug.print( (sizeof(chipPIDStruct) / sizeof(byte) ) *maxPIDs);
+    myDebug.println(F(" bytes in pid structure Array"));
   }
 
   delay(3000);
   
   if(setDebug & udpDebug)
   {
-    Serial.println(F("Configuring IP"));
+    myDebug.println(F("Configuring IP"));
   }
 
   lcd[7]->clear();
@@ -295,9 +291,9 @@ void setup()
   
   if(setDebug & udpDebug)
   {
-    Serial.print(F("MAC Address = "));
+    myDebug.print(F("MAC Address = "));
     print_mac();
-    Serial.println();
+    myDebug.println();
   }
   
   delay(1000);
@@ -311,25 +307,51 @@ void setup()
 #ifdef STATIC_IP  
   Ethernet.begin((uint8_t *) &mac, ip); // use this for static IP
   Udp.begin(localPort);
-#else  
-  if(Ethernet.begin((uint8_t *) &mac) == 0) // use this for dhcp
+#else
+  switch(i2cIPResult[0])
   {
-    lcd[7]->setCursor(0, 1);
-    lcd[7]->print(F("  IP Config Failed  "));
-    lcd[7]->setCursor(0, 2);
-    lcd[7]->print(F("Resetting TeensyNet "));
-    Serial.println(F("Ethernet,begin() failed - Resetting TeensyNet"));
-    delay(1000);
-    softReset();
-  }else{
-    Serial.println(F("Ethernet,begin() success"));
-    Udp.begin(localPort);
-
-    Serial.print(F("My IP address: "));
-    Serial.println(Ethernet.localIP());
-    if(!(bonjourNameBuf[0] >= 0x20 && bonjourNameBuf[0] <= 0x7a))
+    case 0x00:
+    case 0xff:
     {
-      sprintf(bonjourNameBuf, "TeensyNet%d", Ethernet.localIP()[3]);
+      if(Ethernet.begin((uint8_t *) &mac) == 0) // use this for dhcp
+      {
+        lcd[7]->setCursor(0, 1);
+        lcd[7]->print(F("  IP Config Failed  "));
+        lcd[7]->setCursor(0, 2);
+        lcd[7]->print(F("Resetting TeensyNet "));
+        myDebug.println(F("Ethernet,begin() failed - Resetting TeensyNet"));
+        delay(1000);
+        softReset();
+      }else{
+        myDebug.println(F("Ethernet,begin() dhcp success"));
+        Udp.begin(localPort);
+
+        myDebug.print(F("My IP address: "));
+        myDebug.println(Ethernet.localIP());
+        for(uint8_t l = 0; l < 4; l++)
+        {
+          i2cIPResult[l] = Ethernet.localIP()[l];
+        }
+        I2CEEPROM_writeAnything(I2CEEPROMipAddr, i2cIPResult, I2C0x50);
+        
+        if(!(bonjourNameBuf[0] >= 0x20 && bonjourNameBuf[0] <= 0x7a))
+        {
+          sprintf(bonjourNameBuf, "TeensyNet%d", Ethernet.localIP()[3]);
+        }
+        
+        break;
+      }
+    }
+    
+    default:
+    {
+      IPAddress i2cIPAddr(i2cIPResult[0],i2cIPResult[1],i2cIPResult[2],i2cIPResult[3]);
+      Ethernet.begin((uint8_t *) &mac, i2cIPAddr); // use this for IP address from I2CEEPROM
+      Udp.begin(localPort);
+      myDebug.println(F("Ethernet,begin() from I2CEEPROM success"));
+      myDebug.print(F("My IP address: "));
+      myDebug.println(Ethernet.localIP());
+      break;
     }
   }
 #endif
@@ -338,12 +360,12 @@ void setup()
   digitalWrite(LED5, LOW);
   if(EthernetBonjour.begin(bonjourNameBuf))
   {
-    Serial.println(F("Bounjour Service started"));
+    myDebug.println(F("Bounjour Service started"));
     sprintf(bonjourBuf, "%s._discover", bonjourNameBuf);
     EthernetBonjour.addServiceRecord(bonjourBuf, localPort, MDNSServiceUDP);
     I2CEEPROM_writeAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
   }else{
-    Serial.println(F("Bounjour Service failed"));
+    myDebug.println(F("Bounjour Service failed"));
   }
   EthernetBonjour.run();
   digitalWrite(LED5, HIGH);
@@ -384,48 +406,16 @@ void setup()
   
   for(uint8_t q = 0; q < maxGLCDs; q++)
   {
-/*
-    glcd1w[q].Item     = 0; // reset glcd display items
-    glcd1w[q].Position = 0;
-    glcd1w[q].Page     = 0;
-*/
     resetGLCDdisplay(q);
-   
-/*    if(glcd1w[q].Addr[0] == 0x45)
-    {
-      if(setDebug & glcdSerialDebug)
-      {
-        Serial.print(F("Resetting GLCD "));
-        Serial.print(q);
-        Serial.println(F(" TeensyNet"));
-      }
-      sendCommand(dsDevice, q, setResetDisplay, 0,0,0,0,0,0,"",0,0,0,0,0,1); //reset the GLCD Display
-      delay(2000);
-      sendCommand(dsDevice, q, setInitL, 0,0,0,0,0,0,"",0,0,0,0,0,1); //initialize to landscape mode
-      for(uint8_t x = 0; x < 8; x++)
-      {
-        sendCommand(dsDevice, q, setPageWrite, 0,0,0,x,0,0,"",0,0,0,0,0,1); // select page to write to       
-        delay(100);
-        sendCommand(dsDevice, q, clrScn, 0,0,0,0,0,0,"",0,0,0,0,0,1); // clear the page
-        delay(100);
-        sendCommand(dsDevice, q, setPageDisplay, 0,0,0,x,0,0,"",0,0,0,0,0,1); // display the page
-        delay(100);
-        if(setDebug & glcdSerialDebug)
-        {
-          Serial.print(F("Initializing GLCD "));
-          Serial.print(q);
-          Serial.print(F(", Page "));
-          Serial.println(x);
-        }
-        sprintf(displayStr, "GLCD %d, Page %d Initialized", q, x);
-        sendCommand(dsDevice, q, (setPrintStr | setFont | setColorVGA), UBUNTUBOLD,0,WHITE,0,0,0,displayStr,0,0,0,0,0,1); // clear the page
-        delay(1000);
-      }
-      delay(100);
-    }
-*/
   }
 }
+
+#if USESERIAL2 == 1
+  Stream &myDebug = Serial2;
+#else
+  Stream &myDebug = Serial;
+#endif
+
 
 void loop()
 {
@@ -434,8 +424,8 @@ void loop()
   {
     if(setDebug & udpDebug)
     {
-      Serial.print(F("\nLoop:\nReceived packet of size: "));
-      Serial.println(packetSize);
+      myDebug.print(F("\nLoop:\nReceived packet of size: "));
+      myDebug.println(packetSize);
     }
     for(int pbSize = packetSize; pbSize < UDP_TX_PACKET_MAX_SIZE; pbSize++)
     {
@@ -443,25 +433,25 @@ void loop()
     }
     if(setDebug & udpDebug)
     {
-      Serial.print("From ");
+      myDebug.print("From ");
       IPAddress remote = Udp.remoteIP();
       for (int i =0; i < 4; i++)
       {
-        Serial.print(remote[i], DEC);
+        myDebug.print(remote[i], DEC);
         if (i < 3)
         {
-          Serial.print(".");
+          myDebug.print(".");
         }
       }
-      Serial.print(", port ");
-      Serial.println(Udp.remotePort());
+      myDebug.print(", port ");
+      myDebug.println(Udp.remotePort());
     }
     // read the packet into packetBufffer
     Udp.read(PacketBuffer,UDP_TX_PACKET_MAX_SIZE);
     if(setDebug & udpDebug)
     {
-      Serial.println(F("Contents:"));
-      Serial.println(PacketBuffer);
+      myDebug.println(F("Contents:"));
+      myDebug.println(PacketBuffer);
     }
     udpProcess();
   }
@@ -471,7 +461,7 @@ void loop()
   {
     if(setDebug & udpDebug)
     {
-      Serial.println(F("EthernetBonjour.run()"));
+      myDebug.println(F("EthernetBonjour.run()"));
     }
     
     if(setDebug & ethDebug) // display Process Command Letter
@@ -527,13 +517,13 @@ void loop()
 
   if(setDebug & udpTimerDebug && udpTimer > 2000) // Time since Last UDP command
   {
-    Serial.print(F("Time Since Last UDP Command - "));
+    myDebug.print(F("Time Since Last UDP Command - "));
     sprintf(lcdStrBuf, "%ld", (uint32_t) udpTimer);
     lcdCenterStr((char *) lcdStrBuf, lcdChars);
     lcd[7]->setCursor(0, 3);
     lcd[7]->print(lcdStr);
-    Serial.print(lcdStrBuf);
-    Serial.println(F(" milliseconds"));
+    myDebug.print(lcdStrBuf);
+    myDebug.println(F(" milliseconds"));
   }
 /*
   if(udpTimer >= udpTimerMax) // Reset if no UDP activity for more than 1 hour and 
@@ -594,30 +584,30 @@ void readStructures(void)
   
   if(setDebug & eepromDebug)
   { 
-    Serial.print(F("i2cEeResult = 0x"));
-    Serial.println(i2cEeResult, HEX);
+    myDebug.print(F("i2cEeResult = 0x"));
+    myDebug.println(i2cEeResult, HEX);
   }
   
   if(i2cEeResult != 0x55)
   {
     if(setDebug & eepromDebug)
     { 
-       Serial.println(F("No EEPROM Data"));
+       myDebug.println(F("No EEPROM Data"));
     }
     i2cEepromReady = FALSE;
   }else{
     if(setDebug & eepromDebug)
     { 
-       Serial.println(F("EEPROM Data Valid"));
+       myDebug.println(F("EEPROM Data Valid"));
     }
     i2cEepromReady = TRUE;
   }
   
   if(setDebug & eepromDebug)
   {
-    Serial.println(F("Entering readStructures"));
-    Serial.print(F("I2CEEPROMchipAddr = 0x"));
-    Serial.println(I2CEEPROMchipAddr, HEX);
+    myDebug.println(F("Entering readStructures"));
+    myDebug.print(F("I2CEEPROMchipAddr = 0x"));
+    myDebug.println(I2CEEPROMchipAddr, HEX);
   }
 
   i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMchipAddr, chip, I2C0x50);
@@ -625,10 +615,10 @@ void readStructures(void)
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Read "));
-    Serial.print(i2cEeResult16);
-    Serial.print(F(" bytes from address Ox"));
-    Serial.println(I2CEEPROMchipAddr, HEX);
+    myDebug.print(F("Read "));
+    myDebug.print(i2cEeResult16);
+    myDebug.print(F(" bytes from address Ox"));
+    myDebug.println(I2CEEPROMchipAddr, HEX);
   }
 
   i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMglcdAddr, glcd1w, I2C0x50);
@@ -636,51 +626,51 @@ void readStructures(void)
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Read "));
-    Serial.print(i2cEeResult16);
-    Serial.print(F(" bytes from address Ox"));
-    Serial.println(I2CEEPROMglcdAddr, HEX);
+    myDebug.print(F("Read "));
+    myDebug.print(i2cEeResult16);
+    myDebug.print(F(" bytes from address Ox"));
+    myDebug.println(I2CEEPROMglcdAddr, HEX);
   }
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("I2CEEPROMactionAddr = 0x"));
-    Serial.println(I2CEEPROMactionAddr, HEX);
+    myDebug.print(F("I2CEEPROMactionAddr = 0x"));
+    myDebug.println(I2CEEPROMactionAddr, HEX);
   }
 
   i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMactionAddr, action,  I2C0x50);
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Read "));
-    Serial.print(i2cEeResult16);
-    Serial.print(F(" bytes from address Ox"));
-    Serial.println(I2CEEPROMactionAddr, HEX);
+    myDebug.print(F("Read "));
+    myDebug.print(i2cEeResult16);
+    myDebug.print(F(" bytes from address Ox"));
+    myDebug.println(I2CEEPROMactionAddr, HEX);
   }
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("I2CEEPROMpidAddr = 0x"));
-    Serial.println(I2CEEPROMpidAddr, HEX);
+    myDebug.print(F("I2CEEPROMpidAddr = 0x"));
+    myDebug.println(I2CEEPROMpidAddr, HEX);
   }
 
   i2cEeResult16 = I2CEEPROM_readAnything(I2CEEPROMpidAddr, ePID,  I2C0x50);
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Read "));
-    Serial.print(i2cEeResult16);
-    Serial.print(F(" bytes from address Ox"));
-    Serial.println(I2CEEPROMpidAddr, HEX);
-    Serial.println(F(" Completed"));
-    Serial.println(F("Exiting readStructures"));
-    Serial.println(F("Chip Structure"));
+    myDebug.print(F("Read "));
+    myDebug.print(i2cEeResult16);
+    myDebug.print(F(" bytes from address Ox"));
+    myDebug.println(I2CEEPROMpidAddr, HEX);
+    myDebug.println(F(" Completed"));
+    myDebug.println(F("Exiting readStructures"));
+    myDebug.println(F("Chip Structure"));
     displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
-    Serial.println(F("GLCD Structure"));
+    myDebug.println(F("GLCD Structure"));
     displayStructure((byte *)(uint32_t) &glcd1w, sizeof(glcd1w), sizeof(glcd1wStruct));
-    Serial.println(F("Action Structure"));
+    myDebug.println(F("Action Structure"));
     displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
-    Serial.println(F("PID Structure"));
+    myDebug.println(F("PID Structure"));
     displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
   }
 
@@ -692,9 +682,9 @@ void saveStructures(void)
 {  
   if(setDebug & eepromDebug)
   {
-    Serial.println(F("Entering saveStructures"));
-    Serial.print(F("I2CEEPROMchipAddr = 0x"));
-    Serial.println(I2CEEPROMchipAddr, HEX);
+    myDebug.println(F("Entering saveStructures"));
+    myDebug.print(F("I2CEEPROMchipAddr = 0x"));
+    myDebug.println(I2CEEPROMchipAddr, HEX);
   }
   I2CEEPROM_writeAnything(I2CEEPROMccAddr, chipCnt, I2C0x50);
   I2CEEPROM_writeAnything(I2CEEPROMglAddr, numGLCDs, I2C0x50);
@@ -702,85 +692,85 @@ void saveStructures(void)
   i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMchipAddr, chip, I2C0x50);
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Wrote "));
-    Serial.print(i2cEeResult);
-    Serial.print(F(" bytes to address Ox"));
-    Serial.print(I2CEEPROMchipAddr, HEX);
-    Serial.print(F(" from address 0x"));
+    myDebug.print(F("Wrote "));
+    myDebug.print(i2cEeResult);
+    myDebug.print(F(" bytes to address Ox"));
+    myDebug.print(I2CEEPROMchipAddr, HEX);
+    myDebug.print(F(" from address 0x"));
     uint32_t chipStructAddr = (uint32_t) &chip[0];
-    Serial.println(chipStructAddr, HEX);
+    myDebug.println(chipStructAddr, HEX);
   }
 
   i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMglcdAddr, glcd1w, I2C0x50);
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Wrote "));
-    Serial.print(i2cEeResult);
-    Serial.print(F(" bytes to address Ox"));
-    Serial.print(I2CEEPROMglcdAddr, HEX);
-    Serial.print(F(" from address 0x"));
+    myDebug.print(F("Wrote "));
+    myDebug.print(i2cEeResult);
+    myDebug.print(F(" bytes to address Ox"));
+    myDebug.print(I2CEEPROMglcdAddr, HEX);
+    myDebug.print(F(" from address 0x"));
     uint32_t glcd1wStructAddr = (uint32_t) &glcd1w[0];
-    Serial.println(glcd1wStructAddr, HEX);
+    myDebug.println(glcd1wStructAddr, HEX);
   }
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("I2CEEPROMactionAddr = 0x"));
-    Serial.println(I2CEEPROMactionAddr, HEX);
+    myDebug.print(F("I2CEEPROMactionAddr = 0x"));
+    myDebug.println(I2CEEPROMactionAddr, HEX);
   }
   i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMactionAddr, action, I2C0x50);
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Wrote "));
-    Serial.print(i2cEeResult16);
-    Serial.print(F(" bytes to address Ox"));
-    Serial.println(I2CEEPROMactionAddr, HEX);
+    myDebug.print(F("Wrote "));
+    myDebug.print(i2cEeResult16);
+    myDebug.print(F(" bytes to address Ox"));
+    myDebug.println(I2CEEPROMactionAddr, HEX);
   }
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("I2CEEPROMpidAddr = 0x"));
-    Serial.println(I2CEEPROMpidAddr, HEX);
+    myDebug.print(F("I2CEEPROMpidAddr = 0x"));
+    myDebug.println(I2CEEPROMpidAddr, HEX);
   }
   i2cEeResult16 = I2CEEPROM_writeAnything(I2CEEPROMpidAddr, ePID, I2C0x50);
 
   if(setDebug & eepromDebug)
   {
-    Serial.print(F("Wrote "));
-    Serial.print(i2cEeResult16);
-    Serial.print(F(" bytes to address Ox"));
-    Serial.println(I2CEEPROMpidAddr, HEX);
-    Serial.println(F(" Completed - Displaying chip Structures"));
-    Serial.println(F("Chip Structure"));
+    myDebug.print(F("Wrote "));
+    myDebug.print(i2cEeResult16);
+    myDebug.print(F(" bytes to address Ox"));
+    myDebug.println(I2CEEPROMpidAddr, HEX);
+    myDebug.println(F(" Completed - Displaying chip Structures"));
+    myDebug.println(F("Chip Structure"));
     displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
-    Serial.println(F("GLCD Structure"));
+    myDebug.println(F("GLCD Structure"));
     displayStructure((byte *)(uint32_t) &glcd1w, sizeof(glcd1w), sizeof(glcd1wStruct));
-    Serial.println(F("Action Structure"));
+    myDebug.println(F("Action Structure"));
     displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
-    Serial.println(F("PID Structure"));
+    myDebug.println(F("PID Structure"));
     displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
-    Serial.println(F("Exiting saveStructures"));
+    myDebug.println(F("Exiting saveStructures"));
   }
   I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
   if(setDebug & eepromDebug)
   { 
-    Serial.print(F("i2cEeResult = 0x"));
-    Serial.println(i2cEeResult, HEX);
+    myDebug.print(F("i2cEeResult = 0x"));
+    myDebug.println(i2cEeResult, HEX);
   }
   
   if(i2cEeResult != 0x55)
   {
     if(setDebug & eepromDebug)
     { 
-       Serial.println(F("EEPROM Data Erased"));
+       myDebug.println(F("EEPROM Data Erased"));
     }
     i2cEepromReady = FALSE;
   }else{
     if(setDebug & eepromDebug)
     { 
-       Serial.println(F("EEPROM Data Valid"));
+       myDebug.println(F("EEPROM Data Valid"));
     }
     i2cEepromReady = TRUE;
   }
@@ -790,32 +780,32 @@ void saveStructures(void)
 void displayStructure(byte *addr, int xSize, int ySize)
 {
   int x, y;
-  Serial.print(F("0x"));
-  Serial.print((uint32_t)addr, HEX);
-  Serial.print(F(": ")); 
+  myDebug.print(F("0x"));
+  myDebug.print((uint32_t)addr, HEX);
+  myDebug.print(F(": ")); 
   for(x = 0, y = 0; x < xSize; x++)
   {
     if(addr[x] >=0 && addr[x] <= 15)
     {
-      Serial.print(F("0x0"));
+      myDebug.print(F("0x0"));
     }else{
-      Serial.print(F("0x"));
+      myDebug.print(F("0x"));
     }
-    Serial.print(addr[x], HEX);
+    myDebug.print(addr[x], HEX);
     y++;
     if(y < ySize)
     {
-      Serial.print(F(", "));
+      myDebug.print(F(", "));
     }else{
       y = 0;
-      Serial.println();
-      Serial.print(F("0x"));
-      Serial.print((uint32_t)addr + x + 1, HEX);
-      Serial.print(F(": ")); 
+      myDebug.println();
+      myDebug.print(F("0x"));
+      myDebug.print((uint32_t)addr + x + 1, HEX);
+      myDebug.print(F(": ")); 
     }
   }
-  Serial.println();
-  Serial.println();
+  myDebug.println();
+  myDebug.println();
 }
 
 
@@ -829,47 +819,47 @@ void updatePIDs(uint8_t pidCnt)
 
     if(setDebug & pidDebug)
     {
-      Serial.println(F("Entering updatePIDs"));
-      Serial.print(F("PID #"));
-      Serial.println(pidCnt);
-      Serial.print(F("ePID["));
-      Serial.print(pidCnt);
-      Serial.print(F("].pidInput = "));
-      Serial.println((double) ePID[pidCnt].pidInput);
-      Serial.print(F("ePID["));
-      Serial.print(pidCnt);
-      Serial.print(F("].pidKp = "));
-      Serial.println(ePID[pidCnt].pidKp);
-      Serial.print(F("ePID["));
-      Serial.print(pidCnt);
-      Serial.print(F("].pidKi = "));
-      Serial.println(ePID[pidCnt].pidKi);
-      Serial.print(F("ePID["));
-      Serial.print(pidCnt);
-      Serial.print(F("].pidKd = "));
-      Serial.println(ePID[pidCnt].pidKd);
-      Serial.print(F("ePID["));
-      Serial.print(pidCnt);
-      Serial.print(F("].pidDirection = "));
-      Serial.println(ePID[pidCnt].pidDirection);
-      Serial.print(F("ePID["));
-      Serial.print(pidCnt);
-      Serial.print(F("].pidWindowStartTime = "));
-      Serial.println((uint32_t) ePID[pidCnt].pidwindowStartTime);
-      Serial.print(F("millis() = "));
-      Serial.println((uint32_t) millis());
+      myDebug.println(F("Entering updatePIDs"));
+      myDebug.print(F("PID #"));
+      myDebug.println(pidCnt);
+      myDebug.print(F("ePID["));
+      myDebug.print(pidCnt);
+      myDebug.print(F("].pidInput = "));
+      myDebug.println((double) ePID[pidCnt].pidInput);
+      myDebug.print(F("ePID["));
+      myDebug.print(pidCnt);
+      myDebug.print(F("].pidKp = "));
+      myDebug.println(ePID[pidCnt].pidKp);
+      myDebug.print(F("ePID["));
+      myDebug.print(pidCnt);
+      myDebug.print(F("].pidKi = "));
+      myDebug.println(ePID[pidCnt].pidKi);
+      myDebug.print(F("ePID["));
+      myDebug.print(pidCnt);
+      myDebug.print(F("].pidKd = "));
+      myDebug.println(ePID[pidCnt].pidKd);
+      myDebug.print(F("ePID["));
+      myDebug.print(pidCnt);
+      myDebug.print(F("].pidDirection = "));
+      myDebug.println(ePID[pidCnt].pidDirection);
+      myDebug.print(F("ePID["));
+      myDebug.print(pidCnt);
+      myDebug.print(F("].pidWindowStartTime = "));
+      myDebug.println((uint32_t) ePID[pidCnt].pidwindowStartTime);
+      myDebug.print(F("millis() = "));
+      myDebug.println((uint32_t) millis());
     }
   
     if(ePID[pidCnt].myPID->Compute())
     {
       if(setDebug & pidDebug)
       {
-        Serial.println(F("Compute() returned TRUE"));
+        myDebug.println(F("Compute() returned TRUE"));
       }
     }else{
       if(setDebug & pidDebug)
       {
-        Serial.println(F("Compute() returned FALSE"));
+        myDebug.println(F("Compute() returned FALSE"));
       }
     }
 
@@ -877,8 +867,8 @@ void updatePIDs(uint8_t pidCnt)
     
     if(setDebug & pidDebug)
     {
-      Serial.print(F("now - ePID[pidCnt].pidwindowStartTime = "));
-      Serial.println(now - ePID[pidCnt].pidwindowStartTime);
+      myDebug.print(F("now - ePID[pidCnt].pidwindowStartTime = "));
+      myDebug.println(now - ePID[pidCnt].pidwindowStartTime);
     }
 
   /************************************************
@@ -891,43 +881,43 @@ void updatePIDs(uint8_t pidCnt)
   
       if(setDebug & pidDebug)
       {
-        Serial.print(F("ePID["));
-        Serial.print(pidCnt);
-        Serial.print(F("].pidOutPut = "));
-        Serial.println((double) ePID[pidCnt].pidOutput);
-        Serial.print(F("now = "));
-        Serial.println(now);
-        Serial.print(F("ePID["));
-        Serial.print(pidCnt);
-        Serial.print(F("].pidwindowStartTime = "));
-        Serial.println((double) ePID[pidCnt].pidwindowStartTime);
-        Serial.print(F("now - ePID["));
-        Serial.print(pidCnt);
-        Serial.print(F("].pidwindowStartTime = "));
-        Serial.println((double) now - ePID[pidCnt].pidwindowStartTime);
+        myDebug.print(F("ePID["));
+        myDebug.print(pidCnt);
+        myDebug.print(F("].pidOutPut = "));
+        myDebug.println((double) ePID[pidCnt].pidOutput);
+        myDebug.print(F("now = "));
+        myDebug.println(now);
+        myDebug.print(F("ePID["));
+        myDebug.print(pidCnt);
+        myDebug.print(F("].pidwindowStartTime = "));
+        myDebug.println((double) ePID[pidCnt].pidwindowStartTime);
+        myDebug.print(F("now - ePID["));
+        myDebug.print(pidCnt);
+        myDebug.print(F("].pidwindowStartTime = "));
+        myDebug.println((double) now - ePID[pidCnt].pidwindowStartTime);
   
-        Serial.print((double) ePID[pidCnt].pidOutput);
+        myDebug.print((double) ePID[pidCnt].pidOutput);
         
         if(ePID[pidCnt].pidOutput > now - ePID[pidCnt].pidwindowStartTime)
         {
-          Serial.print(F(" > "));
+          myDebug.print(F(" > "));
         }else{
-          Serial.print(F(" < "));
+          myDebug.print(F(" < "));
         }
-        Serial.println((double) now - ePID[pidCnt].pidwindowStartTime);
+        myDebug.println((double) now - ePID[pidCnt].pidwindowStartTime);
       }
 
     if(ePID[pidCnt].pidOutput > now - ePID[pidCnt].pidwindowStartTime)
     {
       if(setDebug & pidDebug)
       {
-        Serial.println(F("Turning Switch ON"));
+        myDebug.println(F("Turning Switch ON"));
       }
       actionSwitchSet((uint8_t *) &ePID[pidCnt].switchPtr->chipAddr, ds2406PIOAon);
     }else{
       if(setDebug & pidDebug)
       {
-        Serial.println(F("Turning Switch OFF"));
+        myDebug.println(F("Turning Switch OFF"));
       }
       actionSwitchSet((uint8_t *) &ePID[pidCnt].switchPtr->chipAddr, ds2406PIOAoff);
     }
@@ -935,11 +925,11 @@ void updatePIDs(uint8_t pidCnt)
 
     if(setDebug & pidDebug)
       {
-        Serial.print(F("ePID["));
-        Serial.print(pidCnt);
-        Serial.print(F("].pidOutput = "));
-        Serial.println((double) ePID[pidCnt].pidOutput);
-        Serial.println(F("Exiting updatePIDs"));
+        myDebug.print(F("ePID["));
+        myDebug.print(pidCnt);
+        myDebug.print(F("].pidOutput = "));
+        myDebug.println((double) ePID[pidCnt].pidOutput);
+        myDebug.println(F("Exiting updatePIDs"));
       }
 
   }else{
@@ -961,12 +951,12 @@ char switchStr[7] = "UNUSED";
   {
     case 0x45:
     {
-//      Serial.println(F("GLCD Found!!"));
+//      myDebug.println(F("GLCD Found!!"));
       if(glcd1w[glcdCnt].Flags & glcdFActive)
       {
         if(setDebug & glcdSerialDebug)
         {
-          Serial.println(F("GLCD Active!!"));
+          myDebug.println(F("GLCD Active!!"));
         }
         switch(glcd1w[glcdCnt].Flags & (glcdFAction | glcdFChip))
         {
@@ -978,8 +968,8 @@ char switchStr[7] = "UNUSED";
               {
                 if(setDebug & glcdSerialDebug)
                 {
-                  Serial.print(F("Setting Page Write to "));
-                  Serial.println(glcd1w[glcdCnt].Page);
+                  myDebug.print(F("Setting Page Write to "));
+                  myDebug.println(glcd1w[glcdCnt].Page);
                 }
                 sendCommand(dsDevice, glcdCnt, setPageWrite, 0, 0, 0, glcd1w[glcdCnt].Page, 0, 0, "", 0, 0, 0, 0, 0, 1); // Set the page to write into
                 glcd1w[glcdCnt].Item += 1;
@@ -990,7 +980,7 @@ char switchStr[7] = "UNUSED";
               {
                 if(setDebug & glcdSerialDebug)
                 {
-                  Serial.print(F("Placing Filled Rectangle"));
+                  myDebug.print(F("Placing Filled Rectangle"));
                 }
                 if( (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position] == NULL) | 
                     (glcd1w[glcdCnt].Action[glcd1w[glcdCnt].Position]->tempPtr == NULL)
@@ -1335,24 +1325,24 @@ void updateGLCD1W(int cnt, uint8_t x)
 
   if(setDebug & glcdSerialDebug)
   {
-    Serial.print(F("GLCD "));
-    Serial.print(cnt);
-    Serial.print(F(" Address 0x"));
-    Serial.print((uint32_t) &(glcd1w[cnt].Addr), HEX);
-    Serial.print(F(" = {"));
+    myDebug.print(F("GLCD "));
+    myDebug.print(cnt);
+    myDebug.print(F(" Address 0x"));
+    myDebug.print((uint32_t) &(glcd1w[cnt].Addr), HEX);
+    myDebug.print(F(" = {"));
 
     for( int i = 0; i < chipAddrSize; i++)
     {
       if(glcd1w[cnt].Addr[i]>=0 && glcd1w[cnt].Addr[i]<16)
       {
-        Serial.print(F("0x0"));
+        myDebug.print(F("0x0"));
       }else{
-        Serial.print(F("0x"));
+        myDebug.print(F("0x"));
       }
-      Serial.print(glcd1w[cnt].Addr[i], HEX);
-      if(i < 7){Serial.print(F(","));}
+      myDebug.print(glcd1w[cnt].Addr[i], HEX);
+      if(i < 7){myDebug.print(F(","));}
     }
-    Serial.println(F("}"));
+    myDebug.println(F("}"));
   }
 }
 
@@ -1400,9 +1390,9 @@ void findChips(void)
     {
       if(setDebug & findChipDebug)
       {
-        Serial.print(F("Chip "));
-        Serial.print(cntx);
-        Serial.println(F(" - Duplicated Array"));
+        myDebug.print(F("Chip "));
+        myDebug.print(cntx);
+        myDebug.println(F(" - Duplicated Array"));
       }
       dupArray = 0;
       continue;
@@ -1413,35 +1403,35 @@ void findChips(void)
       continue;
       if(setDebug & findChipDebug)
       {
-        Serial.print(F("CRC Error - Chip "));
-        Serial.print(cntx);
-        Serial.print(F(" = "));
-        Serial.print(chip[cntx].chipAddr[chipAddrSize-1], HEX);
-        Serial.print(F(", CRC should be "));
-        Serial.println(ds.crc8(chip[cntx].chipAddr, chipAddrSize-1));
+        myDebug.print(F("CRC Error - Chip "));
+        myDebug.print(cntx);
+        myDebug.print(F(" = "));
+        myDebug.print(chip[cntx].chipAddr[chipAddrSize-1], HEX);
+        myDebug.print(F(", CRC should be "));
+        myDebug.println(ds.crc8(chip[cntx].chipAddr, chipAddrSize-1));
       }
     }
 
     if(setDebug & findChipDebug)
     {
-      Serial.print(F("Chip "));
-      Serial.print(cntx);
-      Serial.print(F(" Address 0x"));
-      Serial.print((uint32_t) &(chip[cntx].chipAddr), HEX);
-      Serial.print(F(" = {"));
+      myDebug.print(F("Chip "));
+      myDebug.print(cntx);
+      myDebug.print(F(" Address 0x"));
+      myDebug.print((uint32_t) &(chip[cntx].chipAddr), HEX);
+      myDebug.print(F(" = {"));
       
       for( int i = 0; i < chipAddrSize; i++)
       {
         if(chip[cntx].chipAddr[i]>=0 && chip[cntx].chipAddr[i]<16)
         {
-          Serial.print(F("0x0"));
+          myDebug.print(F("0x0"));
         }else{
-          Serial.print(F("0x"));
+          myDebug.print(F("0x"));
         }
-        Serial.print(chip[cntx].chipAddr[i], HEX);
-        if(i < 7){Serial.print(F(","));}
+        myDebug.print(chip[cntx].chipAddr[i], HEX);
+        if(i < 7){myDebug.print(F(","));}
       }
-      Serial.println(F("}"));
+      myDebug.println(F("}"));
     }
       
     cntx++;
@@ -1477,13 +1467,13 @@ void findChips(void)
   
   if(setDebug & findChipDebug)
   {
-    Serial.print(chipCnt);
-    Serial.print(F(" Sensor"));
+    myDebug.print(chipCnt);
+    myDebug.print(F(" Sensor"));
     if(chipCnt == 1)
     {
-      Serial.println(F(" Detected"));
+      myDebug.println(F(" Detected"));
     }else{
-      Serial.println(F("s Detected"));
+      myDebug.println(F("s Detected"));
     }
   }  
   digitalWrite(LED1, HIGH); // end DSO sync
@@ -1503,11 +1493,11 @@ void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
     {
       if(addrVal[addrResultCnt] >= 0 && addrVal[addrResultCnt] <= 9)
       {
-        Serial.print(F(" 0x0"));
+        myDebug.print(F(" 0x0"));
       }else{
-        Serial.print(F(" 0x"));
+        myDebug.print(F(" 0x"));
       }
-      Serial.print(addrVal[addrResultCnt], HEX);
+      myDebug.print(addrVal[addrResultCnt], HEX);
     }
       
     addrResultCnt++;
@@ -1516,7 +1506,7 @@ void asciiArrayToHexArray(char* result, char* addrDelim, uint8_t* addrVal)
    
   if( (setDebug & pidDebug) || (setDebug & glcdNameUpdate) )
   {
-    Serial.println();
+    myDebug.println();
   }
 }
 
@@ -1620,7 +1610,7 @@ uint8_t matchChipAddress(uint8_t* array)
    
   if(setDebug & pidDebug)
   {
-   Serial.println(F("matchChipAddress"));
+   myDebug.println(F("matchChipAddress"));
   }
   
   for(addrMatchCnt = 0, chipAddrCnt = 0; ((addrMatchCnt < chipAddrSize) || (chipAddrCnt > chipCnt)); addrMatchCnt++)
@@ -1632,7 +1622,7 @@ uint8_t matchChipAddress(uint8_t* array)
       
       if(setDebug & pidDebug)
       {
-        Serial.println(chipAddrCnt);
+        myDebug.println(chipAddrCnt);
       }
   
       continue;
@@ -1640,8 +1630,8 @@ uint8_t matchChipAddress(uint8_t* array)
     
     if(setDebug & pidDebug)
     {
-      Serial.print(array[addrMatchCnt], HEX);
-      Serial.print(F(","));
+      myDebug.print(array[addrMatchCnt], HEX);
+      myDebug.print(F(","));
     }
   }
   
@@ -1649,13 +1639,13 @@ uint8_t matchChipAddress(uint8_t* array)
   {
     if(setDebug & pidDebug)
     {
-      Serial.print(F("MATCH!! - "));
+      myDebug.print(F("MATCH!! - "));
     }
   }else{
 
     if(setDebug & pidDebug)
     {
-      Serial.print(F("NO MATCH!! - "));
+      myDebug.print(F("NO MATCH!! - "));
     }
 
     chipAddrCnt = 0xFF;
@@ -1663,7 +1653,7 @@ uint8_t matchChipAddress(uint8_t* array)
 
   if(setDebug & pidDebug)
   {
-    Serial.println(chipAddrCnt);
+    myDebug.println(chipAddrCnt);
   }
 
   return(chipAddrCnt);
@@ -1675,7 +1665,7 @@ uint8_t matchglcd1wAddress(uint8_t* array)
    
   if(setDebug & pidDebug)
   {
-   Serial.println(F("matchglcd1wAddress"));
+   myDebug.println(F("matchglcd1wAddress"));
   }
   
   for(addrMatchCnt = 0, glcd1wAddrCnt = 0; ((addrMatchCnt < chipAddrSize) || (glcd1wAddrCnt > glcdCnt)); addrMatchCnt++)
@@ -1687,7 +1677,7 @@ uint8_t matchglcd1wAddress(uint8_t* array)
       
       if(setDebug & pidDebug)
       {
-        Serial.println(glcd1wAddrCnt);
+        myDebug.println(glcd1wAddrCnt);
       }
   
       continue;
@@ -1695,8 +1685,8 @@ uint8_t matchglcd1wAddress(uint8_t* array)
     
     if(setDebug & pidDebug)
     {
-      Serial.print(array[addrMatchCnt], HEX);
-      Serial.print(F(","));
+      myDebug.print(array[addrMatchCnt], HEX);
+      myDebug.print(F(","));
     }
   }
   
@@ -1704,13 +1694,13 @@ uint8_t matchglcd1wAddress(uint8_t* array)
   {
     if(setDebug & pidDebug)
     {
-      Serial.print(F("MATCH!! - "));
+      myDebug.print(F("MATCH!! - "));
     }
   }else{
 
     if(setDebug & pidDebug)
     {
-      Serial.print(F("NO MATCH!! - "));
+      myDebug.print(F("NO MATCH!! - "));
     }
 
     glcd1wAddrCnt = 0xFF;
@@ -1718,7 +1708,7 @@ uint8_t matchglcd1wAddress(uint8_t* array)
 
   if(setDebug & pidDebug)
   {
-    Serial.println(glcd1wAddrCnt);
+    myDebug.println(glcd1wAddrCnt);
   }
 
   return(glcd1wAddrCnt);
@@ -1740,9 +1730,9 @@ void showChipAddress( uint8_t* array)
 {
   if(setDebug & findChipDebug)
   {
-    Serial.print(F("Chip Address 0x"));
-    Serial.print((uint32_t) array, HEX);
-    Serial.print(F(" = "));
+    myDebug.print(F("Chip Address 0x"));
+    myDebug.print((uint32_t) array, HEX);
+    myDebug.print(F(" = "));
   }
   
   for( int i = 0; i < chipAddrSize; i++)
@@ -1751,10 +1741,10 @@ void showChipAddress( uint8_t* array)
     rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "%02X",(uint8_t) array[i]);
     if(setDebug & findChipDebug)
     {
-      Serial.print(F("0x"));
-      if( array[i] < 0x10 ) Serial.print(F("0")); 
-      Serial.print((uint8_t) array[i], HEX);
-      if(i < 7)Serial.print(F(","));
+      myDebug.print(F("0x"));
+      if( array[i] < 0x10 ) myDebug.print(F("0")); 
+      myDebug.print((uint8_t) array[i], HEX);
+      if(i < 7)myDebug.print(F(","));
     }
     if(i < 7)
     {
@@ -1763,7 +1753,7 @@ void showChipAddress( uint8_t* array)
   }
   if(setDebug & findChipDebug)
   {
-    Serial.println();
+    myDebug.println();
   }
   
 }
@@ -1852,17 +1842,17 @@ void updateChipStatus(int x)
         if(setDebug & ds2762Debug)
         {
           startTime = millis();
-          Serial.println(F("Enter Read DS2762 Lookup"));
+          myDebug.println(F("Enter Read DS2762 Lookup"));
         }
         Read_TC_Volts(x);
         Read_CJ_Temp(x);
         cjComp = pgm_read_word_near(kTable + cjTemperature);
         if(setDebug & ds2762Debug)
         {
-          Serial.print(F("kTable["));
-          Serial.print(cjTemperature);
-          Serial.print(F("] = "));
-          Serial.println(pgm_read_word_near(kTable + cjTemperature));
+          myDebug.print(F("kTable["));
+          myDebug.print(cjTemperature);
+          myDebug.print(F("] = "));
+          myDebug.println(pgm_read_word_near(kTable + cjTemperature));
         }
         if(sign == 1)
         {
@@ -1877,9 +1867,9 @@ void updateChipStatus(int x)
         }
         if(setDebug & ds2762Debug)
         {
-          Serial.print(F("cjComp = "));
-          Serial.print(cjComp);
-          Serial.println(F(" microvolts"));
+          myDebug.print(F("cjComp = "));
+          myDebug.print(cjComp);
+          myDebug.println(F(" microvolts"));
         }
         tblHi = kTableCnt - 1;
         TC_Lookup();
@@ -1887,11 +1877,11 @@ void updateChipStatus(int x)
         {
           if(setDebug & ds2762Debug)
           {
-            Serial.print(F("Temp = "));
-            Serial.print(eePntr);
-            Serial.print(F(" degrees C, "));
-            Serial.print(((eePntr * 9) / 5) + 32);
-            Serial.println(F(" degrees F"));
+            myDebug.print(F("Temp = "));
+            myDebug.print(eePntr);
+            myDebug.print(F(" degrees C, "));
+            myDebug.print(((eePntr * 9) / 5) + 32);
+            myDebug.println(F(" degrees F"));
           }
           if(showCelsius == TRUE)
           {
@@ -1902,17 +1892,17 @@ void updateChipStatus(int x)
         }else{
           if(setDebug & ds2762Debug)
           {
-            Serial.println(F("Value Out Of Range"));
+            myDebug.println(F("Value Out Of Range"));
           }
         }
         if(setDebug & ds2762Debug)
         {
           endTime = millis();
-          Serial.print(F("Exit Read DS2762 Lookup - "));
-          Serial.print(endTime - startTime);
-          Serial.println(F(" milliseconds"));
-          Serial.println();
-          Serial.println();
+          myDebug.print(F("Exit Read DS2762 Lookup - "));
+          myDebug.print(endTime - startTime);
+          myDebug.println(F(" milliseconds"));
+          myDebug.println();
+          myDebug.println();
         }
         chip[x].tempTimer = millis() + tempReadDelay;
       }
@@ -1952,9 +1942,9 @@ void updateChipStatus(int x)
         {
           if(setDebug & crcDebug)
           {
-            Serial.print(F("crc Error chip["));
-            Serial.print(x);
-            Serial.println(F("], resetting timer"));
+            myDebug.print(F("crc Error chip["));
+            myDebug.print(x);
+            myDebug.println(F("], resetting timer"));
           }
           chip[x].tempTimer = 0; // restart the chip times
           break; // CRC invalid, try later
@@ -2005,12 +1995,12 @@ void updateChipStatus(int x)
 
         if(setDebug & chipDebug)
         {
-          Serial.print(F("chip "));
-          Serial.print(x);
-          Serial.print(F(" chipCRC = 0X"));
-          Serial.print(chipCRCval, HEX);
-          Serial.print(F(", chipBufferCRC = 0X"));
-          Serial.println(chipBufferCRC, HEX);
+          myDebug.print(F("chip "));
+          myDebug.print(x);
+          myDebug.print(F(" chipCRC = 0X"));
+          myDebug.print(chipCRCval, HEX);
+          myDebug.print(F(", chipBufferCRC = 0X"));
+          myDebug.println(chipBufferCRC, HEX);
         }
         
         if(chipBufferCRC == chipCRCval) noCRCmatch = 0;
@@ -2098,10 +2088,10 @@ void updateActions(uint8_t x)
       tempStrCnt = strlen(action[x].tempPtr->chipName);
       if(setDebug & lcdDebug)
       {
-        Serial.print(F("tempStrCnt for "));
-        Serial.print(action[x].tempPtr->chipName);
-        Serial.print(F(" is "));
-        Serial.println(tempStrCnt);
+        myDebug.print(F("tempStrCnt for "));
+        myDebug.print(action[x].tempPtr->chipName);
+        myDebug.print(F(" is "));
+        myDebug.println(tempStrCnt);
       }
       lcd[LCDx]->print(action[x].tempPtr->chipName);
       lcd[LCDx]->setCursor(tempStrCnt, 1);
@@ -2112,13 +2102,13 @@ void updateActions(uint8_t x)
       tempStrCnt = sprintf( tempStr, "%d", (int16_t) action[x].tempPtr->chipStatus);
       if(setDebug & lcdDebug)
       {
-        Serial.print(F("tempStrCnt for action["));
-        Serial.print(x);
-        Serial.print(F("]tempPtr.->chipStatus"));
-        Serial.print(F(" is "));
-        Serial.print(tempStrCnt);
-        Serial.print(F(" and the chipStatus is "));
-        Serial.println((int16_t) action[x].tempPtr->chipStatus);
+        myDebug.print(F("tempStrCnt for action["));
+        myDebug.print(x);
+        myDebug.print(F("]tempPtr.->chipStatus"));
+        myDebug.print(F(" is "));
+        myDebug.print(tempStrCnt);
+        myDebug.print(F(" and the chipStatus is "));
+        myDebug.println((int16_t) action[x].tempPtr->chipStatus);
      }
 
       switch(tempStrCnt)
@@ -2156,14 +2146,14 @@ void updateActions(uint8_t x)
       {
         if(action[x].tcPtr != NULL)
         {
-          Serial.print(F("tempStrCnt for "));
-          Serial.print(action[x].tcPtr->chipName);
-          Serial.print(F(" is "));
-          Serial.println(tempStrCnt);
+          myDebug.print(F("tempStrCnt for "));
+          myDebug.print(action[x].tcPtr->chipName);
+          myDebug.print(F(" is "));
+          myDebug.println(tempStrCnt);
         }else{
-          Serial.print(F("action["));
-          Serial.print(x);
-          Serial.println(F("].tcPtr->chipName is not used"));
+          myDebug.print(F("action["));
+          myDebug.print(x);
+          myDebug.println(F("].tcPtr->chipName is not used"));
         }
       }
       
@@ -2198,14 +2188,14 @@ void updateActions(uint8_t x)
       {
         if(action[x].thPtr != NULL)
         {
-          Serial.print(F("tempStrCnt for "));
-          Serial.print(action[x].thPtr->chipName);
-          Serial.print(F(" is "));
-          Serial.println(tempStrCnt);
+          myDebug.print(F("tempStrCnt for "));
+          myDebug.print(action[x].thPtr->chipName);
+          myDebug.print(F(" is "));
+          myDebug.println(tempStrCnt);
         }else{
-          Serial.print(F("action["));
-          Serial.print(x);
-          Serial.println(F("].thPtr->chipName is not used"));
+          myDebug.print(F("action["));
+          myDebug.print(x);
+          myDebug.println(F("].thPtr->chipName is not used"));
         }
       }
       if(action[x].thPtr != NULL)
@@ -2231,9 +2221,9 @@ void updateActions(uint8_t x)
       if(setDebug & lcdDebug)
       {
         lcdUpdateStop = millis();
-        Serial.print(F("lcdupdate took "));
-        Serial.print(lcdUpdateStop - lcdUpdateStart);
-        Serial.println(F(" milliseconds"));
+        myDebug.print(F("lcdupdate took "));
+        myDebug.print(lcdUpdateStop - lcdUpdateStart);
+        myDebug.println(F(" milliseconds"));
       }
 
     }
@@ -2263,12 +2253,12 @@ void EEPROMclear(void)
   }
   if(setDebug & eepromDebug)
   {
-    Serial.println(F("Exiting readStructures"));
-    Serial.println(F("Chip Structure"));
+    myDebug.println(F("Exiting readStructures"));
+    myDebug.println(F("Chip Structure"));
     displayStructure((byte *)(uint32_t) &chip, sizeof(chip), sizeof(chipStruct));
-    Serial.println(F("Action Structure"));
+    myDebug.println(F("Action Structure"));
     displayStructure((byte *)(uint32_t) &action, sizeof(action), sizeof(chipActionStruct));
-    Serial.println(F("PID Structure"));
+    myDebug.println(F("PID Structure"));
     displayStructure((byte *)(uint32_t) &ePID, sizeof(ePID), sizeof(chipPIDStruct));
   }
   lcd[7]->setCursor(0, 3);
@@ -2302,7 +2292,7 @@ void Read_TC_Volts(uint8_t x)
 { 
   if(setDebug & ds2762Debug)
   {
-    Serial.println(F("Enter Read_TC_Volts"));
+    myDebug.println(F("Enter Read_TC_Volts"));
   }
   ds.reset();
   ds.select(chip[x].chipAddr);
@@ -2313,17 +2303,17 @@ void Read_TC_Volts(uint8_t x)
     voltage[i] = ds.read();
     if(setDebug & ds2762Debug)
     {
-      Serial.print(F("voltage["));
-      Serial.print(i);
-      Serial.print(F("] = 0x"));
-      if(voltage[i] < 0x10){Serial.print(F("0"));}
-      Serial.print(voltage[i], HEX);
-      Serial.print(F(" "));
+      myDebug.print(F("voltage["));
+      myDebug.print(i);
+      myDebug.print(F("] = 0x"));
+      if(voltage[i] < 0x10){myDebug.print(F("0"));}
+      myDebug.print(voltage[i], HEX);
+      myDebug.print(F(" "));
     }
   }
   if(setDebug & ds2762Debug)
   {
-    Serial.println();
+    myDebug.println();
   }
   ds.reset();
   tcVoltage = (voltage[0] << 8) + voltage[1];
@@ -2344,10 +2334,10 @@ void Read_TC_Volts(uint8_t x)
   
   if(setDebug & ds2762Debug)
   {
-    Serial.print(F("tcVoltage = "));
-    Serial.print(tcVoltage);
-    Serial.println(F(" microvolts"));
-    Serial.println(F("Exit Read_TC_Volts"));
+    myDebug.print(F("tcVoltage = "));
+    myDebug.print(tcVoltage);
+    myDebug.println(F(" microvolts"));
+    myDebug.println(F("Exit Read_TC_Volts"));
   }
 } 
 
@@ -2358,7 +2348,7 @@ void Read_CJ_Temp(uint8_t x)
 { 
   if(setDebug & ds2762Debug)
   {
-    Serial.println(F("Enter Read_CJ_Temp"));
+    myDebug.println(F("Enter Read_CJ_Temp"));
   }
   ds.reset();
   ds.select(chip[x].chipAddr);
@@ -2369,17 +2359,17 @@ void Read_CJ_Temp(uint8_t x)
     cjTemp[i] = ds.read();
     if(setDebug & ds2762Debug)
     {
-      Serial.print(F("cjTemp["));
-      Serial.print(i);
-      Serial.print(F("] = 0x"));
-      if(cjTemp[i] < 0x10){Serial.print(F("0"));}
-      Serial.print(cjTemp[i], HEX);
-      Serial.print(F(" "));
+      myDebug.print(F("cjTemp["));
+      myDebug.print(i);
+      myDebug.print(F("] = 0x"));
+      if(cjTemp[i] < 0x10){myDebug.print(F("0"));}
+      myDebug.print(cjTemp[i], HEX);
+      myDebug.print(F(" "));
     }
   }
   if(setDebug & ds2762Debug)
   {
-    Serial.println();
+    myDebug.println();
   }
   ds.reset();
   cjTemperature = (cjTemp[0] << 8) + cjTemp[1];
@@ -2393,12 +2383,12 @@ void Read_CJ_Temp(uint8_t x)
   } 
   if(setDebug & ds2762Debug)
   {
-    Serial.print(F("cjTemperature = "));
-    Serial.print(cjTemperature);
-    Serial.print(F(" degrees C, "));
-    Serial.print(((cjTemperature * 9) / 5) + 32);
-    Serial.println(F(" degrees F")); 
-    Serial.println(F("Exit Read_CJ_Temp"));
+    myDebug.print(F("cjTemperature = "));
+    myDebug.print(cjTemperature);
+    myDebug.print(F(" degrees C, "));
+    myDebug.print(((cjTemperature * 9) / 5) + 32);
+    myDebug.println(F(" degrees F")); 
+    myDebug.println(F("Exit Read_CJ_Temp"));
   }
 } 
 
@@ -2410,7 +2400,7 @@ void TC_Lookup(void)
 { 
   if(setDebug & ds2762Debug)
   {
-    Serial.println(F("Enter TC_Lookup"));
+    myDebug.println(F("Enter TC_Lookup"));
   }
   tblLo=0; // low entry of table 
   tempC=22; // default to room temp
@@ -2425,14 +2415,14 @@ void TC_Lookup(void)
       testVal=pgm_read_word_near(kTable + eePntr); // read value from midpoint
       if(setDebug & ds2762Debug)
       {
-        Serial.print(F("testVal = "));
-        Serial.print(testVal);
+        myDebug.print(F("testVal = "));
+        myDebug.print(testVal);
       }
       if(cjComp == testVal)
       {
         if(setDebug & ds2762Debug)
         {
-          Serial.println(F(" - TC_Lookup Temp Match"));
+          myDebug.println(F(" - TC_Lookup Temp Match"));
         }
 //        tempC = eePntr;
         return; // found it! 
@@ -2441,29 +2431,29 @@ void TC_Lookup(void)
         {
           if(setDebug & ds2762Debug)
           {
-             Serial.println(F(" - testVal too BIG"));
+             myDebug.println(F(" - testVal too BIG"));
           }
          tblHi=eePntr; //search lower half
         }else{
           if(setDebug & ds2762Debug)
           {
-             Serial.println(F(" - testVal too small"));
+             myDebug.println(F(" - testVal too small"));
           }
          tblLo=eePntr; // search upper half
         }
       }
       if(setDebug & ds2762Debug)
       {
-        Serial.print(F("tblHi = "));
-        Serial.print(tblHi);
-        Serial.print(F(", tblLo = "));
-        Serial.println(tblLo);
+        myDebug.print(F("tblHi = "));
+        myDebug.print(tblHi);
+        myDebug.print(F(", tblLo = "));
+        myDebug.println(tblLo);
       }
       if((tblHi-tblLo)<2)
       { // span at minimum 
         if(setDebug & ds2762Debug)
         {
-          Serial.println(F("TC_Lookup Temp Span At Minimum"));
+          myDebug.println(F("TC_Lookup Temp Span At Minimum"));
         }
         eePntr=tblLo; 
         return; 
@@ -2483,39 +2473,39 @@ void lcdCenterStr(char *str, uint8_t len)
     strcpy(lcdStr, "  ERROR - TOO LONG  ");
     if(setDebug & lcdDebug)
     {
-      Serial.println(F("String was too long for the LCD display"));
+      myDebug.println(F("String was too long for the LCD display"));
     }
   }else if(strlen(str) == len){
     strcpy(lcdStr, str);
     if(setDebug & lcdDebug)
     {
-      Serial.println(F("String was exactly right for the LCD display"));
+      myDebug.println(F("String was exactly right for the LCD display"));
     }
   }else{
     
     if(setDebug & lcdDebug)
     {
-      Serial.print(F("Input String = "));
-      Serial.println(str);
-      Serial.print(F("strlen(str) = "));
-      Serial.print(strlen(str));
-      Serial.println(F(" bytes"));
+      myDebug.print(F("Input String = "));
+      myDebug.println(str);
+      myDebug.print(F("strlen(str) = "));
+      myDebug.print(strlen(str));
+      myDebug.println(F(" bytes"));
     }
 
     lcdPad = (len - strlen(str)) / 2;
     if(setDebug & lcdDebug)
     {
-      Serial.print(F("lcdPad = "));
-      Serial.println(lcdPad);
+      myDebug.print(F("lcdPad = "));
+      myDebug.println(lcdPad);
     }
 
     memcpy(&lcdStr[lcdPad], str, strlen(str));
     if(setDebug & lcdDebug)
     {
-      Serial.println(F("String was smaller than the LCD Display"));
-      Serial.print(F("lcdStr = \""));
-      Serial.print(lcdStr);
-      Serial.println(F("\""));
+      myDebug.println(F("String was smaller than the LCD Display"));
+      myDebug.print(F("lcdStr = \""));
+      myDebug.print(lcdStr);
+      myDebug.println(F("\""));
     }
   }
 }
@@ -2524,7 +2514,7 @@ void checkMasterStop(void)
 {
   if(setDebug & resetDebug)
   { 
-    Serial.println(F("Checking Master Stop"));
+    myDebug.println(F("Checking Master Stop"));
   }
   elapsedMillis MSTimer = 0;
   while(digitalRead(hwMasterStopPin) == LOW)
@@ -2533,7 +2523,7 @@ void checkMasterStop(void)
     {
       if(setDebug & resetDebug)
       { 
-        Serial.println(F("Executing Master Stop"));
+        myDebug.println(F("Executing Master Stop"));
       }
       MasterStop();
       break;
@@ -2545,7 +2535,7 @@ void checkForReset(void)
 {
   if(setDebug & resetDebug)
   { 
-    Serial.println(F("Checking Reset"));
+    myDebug.println(F("Checking Reset"));
   }
   elapsedMillis resetTimer = 0;
   while(digitalRead(chipResetPin) == LOW)
@@ -2554,7 +2544,7 @@ void checkForReset(void)
     {
       if(setDebug & resetDebug)
       { 
-        Serial.println(F("Executing Reset"));
+        myDebug.println(F("Executing Reset"));
       }
       MasterStop();
       softReset();
@@ -2568,7 +2558,7 @@ void KickDog(void)
   digitalWrite(LED5, LOW);
   if(setDebug & wdDebug)
   {
-    Serial.println("Kicking the dog!");
+    myDebug.println("Kicking the dog!");
   }
   noInterrupts();
   WDOG_REFRESH = 0xA602;
@@ -2611,17 +2601,17 @@ void sendCommand(uint8_t deviceType, uint8_t device, uint32_t  flags ,
   {
     if(setDebug & glcdSerialDebug)
     {
-      Serial.print(F("GLCD Addr: "));
-      Serial.print(x);
-      Serial.print(F(" = "));
+      myDebug.print(F("GLCD Addr: "));
+      myDebug.print(x);
+      myDebug.print(F(" = "));
       for( i = 0; i < 8; i++)
       {
-        Serial.print(F("0x"));
-        if(glcd1w[device].Addr[i] < 16) Serial.print(F("0"));
-        Serial.print(glcd1w[device].Addr[i], HEX);
-        Serial.print(F(" "));
+        myDebug.print(F("0x"));
+        if(glcd1w[device].Addr[i] < 16) myDebug.print(F("0"));
+        myDebug.print(glcd1w[device].Addr[i], HEX);
+        myDebug.print(F(" "));
       }
-      Serial.println();
+      myDebug.println();
     }else{
       delayMicroseconds(50);
     }
@@ -2639,15 +2629,15 @@ void sendCommand(uint8_t deviceType, uint8_t device, uint32_t  flags ,
     }
     if(setDebug & glcdSerialDebug)
     {
-      Serial.print(F("DATA = "));
+      myDebug.print(F("DATA = "));
       for( i = 0; i < sizeof(glcdCMD); i++)
       {
-        Serial.print(F("0x"));
-        if(glcdUNION.glcdARRAY[i] < 16) Serial.print(F("0"));
-        Serial.print(glcdUNION.glcdARRAY[i], HEX);
-        Serial.print(F(" "));
+        myDebug.print(F("0x"));
+        if(glcdUNION.glcdARRAY[i] < 16) myDebug.print(F("0"));
+        myDebug.print(glcdUNION.glcdARRAY[i], HEX);
+        myDebug.print(F(" "));
       }
-      Serial.println();
+      myDebug.println();
     }
     if(setDebug & glcdSerialDebug)
     {
@@ -2689,37 +2679,37 @@ void sendUDPpacket(void)
   
   if(setDebug & udpDebug)
   {
-    Serial.print(F("rBuffCnt = "));
-    Serial.println(rBuffCnt);
-    Serial.println(F("ReplyBuffer:"));
+    myDebug.print(F("rBuffCnt = "));
+    myDebug.println(rBuffCnt);
+    myDebug.println(F("ReplyBuffer:"));
     for(q = 0; q < rBuffCnt; q++)
     {
       if(ReplyBuffer[q] != 0x00)
       {
-        Serial.write(ReplyBuffer[q]);
+        myDebug.write(ReplyBuffer[q]);
         if(ReplyBuffer[q] == ';')
         {
-          Serial.println();
+          myDebug.println();
         }
       }
     }
-    Serial.println();
+    myDebug.println();
     if(setDebug & udpHexBuff)
     {
       for(q = 0; q < rBuffCnt; q++)
       {
-        Serial.print(F("0x"));
+        myDebug.print(F("0x"));
         if(ReplyBuffer[q] < 0x10)
         {
-          Serial.print(F("0"));
+          myDebug.print(F("0"));
         }
-        Serial.print(ReplyBuffer[q], HEX);
+        myDebug.print(ReplyBuffer[q], HEX);
         if(v <= 14)
         {
-          Serial.print(F(" "));
+          myDebug.print(F(" "));
           v++;
         }else{
-          Serial.println();
+          myDebug.println();
           v = 0;
         }
       }
@@ -2962,28 +2952,28 @@ void udpProcess(void)
       EthernetBonjour.setBonjourName(bonjourNameBuf);
       if(setDebug & bonjourDebug)
       {
-        Serial.print(F("Bounjour Name set to: "));
-        Serial.println(bonjourNameBuf);
+        myDebug.print(F("Bounjour Name set to: "));
+        myDebug.println(bonjourNameBuf);
       }
       EthernetBonjour.removeAllServiceRecords();
       if(setDebug & bonjourDebug)
       {
-        Serial.println(F("Bounjour Service Records Removed"));
-        Serial.print(F("Setting Bonjour Service record to "));
+        myDebug.println(F("Bounjour Service Records Removed"));
+        myDebug.print(F("Setting Bonjour Service record to "));
       }
       sprintf(bonjourBuf, "%s._discover", bonjourNameBuf);
       if(setDebug & bonjourDebug)
       {
-        Serial.println(bonjourBuf);
+        myDebug.println(bonjourBuf);
       }
       EthernetBonjour.addServiceRecord(bonjourBuf, localPort, MDNSServiceUDP);
       
       I2CEEPROM_writeAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
       if(setDebug & bonjourDebug)
       {
-        Serial.print(F("Saving "));
-        Serial.print(bonjourNameBuf);
-        Serial.println(F(" to I2CEEPROM"));
+        myDebug.print(F("Saving "));
+        myDebug.print(bonjourNameBuf);
+        myDebug.println(F(" to I2CEEPROM"));
       }
       lcd[7]->setCursor(0, 0);
       lcdCenterStr(bonjourNameBuf, lcdChars);
@@ -2998,7 +2988,7 @@ void udpProcess(void)
     {
       if(setDebug & udpDebug)
       {
-        Serial.println(F("getActionArray"));
+        myDebug.println(F("getActionArray"));
       }
       x = atoi((char *) &PacketBuffer[1]);
       if(x >= maxActions)
@@ -3007,8 +2997,8 @@ void udpProcess(void)
       }else{
         if(setDebug & udpDebug)
         {
-          Serial.print(F("x = "));
-          Serial.println(x);
+          myDebug.print(F("x = "));
+          myDebug.println(x);
         }
   
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%d",action[x].actionEnabled);
@@ -3084,7 +3074,7 @@ void udpProcess(void)
     {
       if(setDebug & actionDebug)
       {
-        Serial.println(PacketBuffer);
+        myDebug.println(PacketBuffer);
       }
      
       result = strtok( PacketBuffer, delim );
@@ -3093,16 +3083,16 @@ void udpProcess(void)
       {
         if(setDebug & actionDebug)
         {
-          Serial.print(F("resultCnt = "));
-          Serial.println(resultCnt);
+          myDebug.print(F("resultCnt = "));
+          myDebug.println(resultCnt);
         }
         
         result = strtok( NULL, delim );
         
         if(setDebug & actionDebug)
         {
-          Serial.print(F("result = "));
-          Serial.println(result);
+          myDebug.print(F("result = "));
+          myDebug.println(result);
         }
         
         if(result == NULL){break;}
@@ -3114,8 +3104,8 @@ void udpProcess(void)
             actionArray = atoi(result);
             if(setDebug & actionDebug)
             {
-              Serial.print(F("Case 0: actionArray = "));
-              Serial.println(actionArray);
+              myDebug.print(F("Case 0: actionArray = "));
+              myDebug.println(actionArray);
             }
             break;
           }
@@ -3124,8 +3114,8 @@ void udpProcess(void)
             actionSection = atoi(result);
             if(setDebug & actionDebug)
             {
-              Serial.print(F("Case 1: actionSection = "));
-              Serial.println(actionSection);
+              myDebug.print(F("Case 1: actionSection = "));
+              myDebug.println(actionSection);
             }
             break;
           }
@@ -3136,11 +3126,11 @@ void udpProcess(void)
             
             if(setDebug & actionDebug)
             {
-              Serial.print(F("Case 2: actionEnable = "));
-              Serial.println(actionEnableTemp);
-              Serial.print(F("action["));
-              Serial.print(actionArray);
-              Serial.print(F("]"));
+              myDebug.print(F("Case 2: actionEnable = "));
+              myDebug.println(actionEnableTemp);
+              myDebug.print(F("action["));
+              myDebug.print(actionArray);
+              myDebug.print(F("]"));
             }
             
             switch (actionSection)
@@ -3153,7 +3143,7 @@ void udpProcess(void)
                   
                   if(setDebug & actionDebug)
                   {
-                    Serial.println(F(".actionEnabled is Enabled"));
+                    myDebug.println(F(".actionEnabled is Enabled"));
                   }
                   
                 }else{
@@ -3161,16 +3151,16 @@ void udpProcess(void)
                   
                   if(setDebug & actionDebug)
                   {
-                    Serial.println(F(".actionEnabled is Disabled"));
+                    myDebug.println(F(".actionEnabled is Disabled"));
                   }
                 }
                 
               if(setDebug & actionDebug)
                 {
-                  Serial.print(F("action["));
-                  Serial.print(actionArray);
-                  Serial.print(F("].actionEnabled = "));
-                  Serial.println(action[actionArray].actionEnabled);
+                  myDebug.print(F("action["));
+                  myDebug.print(actionArray);
+                  myDebug.print(F("].actionEnabled = "));
+                  myDebug.println(action[actionArray].actionEnabled);
                 }
                 
                 break;
@@ -3185,8 +3175,8 @@ void udpProcess(void)
                   
                   if(setDebug & actionDebug)
                   {
-                    Serial.print(F(".tooCold is set to "));
-                    Serial.println(actionEnableTemp);
+                    myDebug.print(F(".tooCold is set to "));
+                    myDebug.println(actionEnableTemp);
                   }
                   
                 }else if( actionSection == 3){
@@ -3194,8 +3184,8 @@ void udpProcess(void)
                   
                   if(setDebug & actionDebug)
                   {
-                    Serial.print(F(".tooHot is set to "));
-                    Serial.println(actionEnableTemp);
+                    myDebug.print(F(".tooHot is set to "));
+                    myDebug.println(actionEnableTemp);
                   }
                 }
                 break;
@@ -3210,26 +3200,26 @@ void udpProcess(void)
             {
               if(setDebug & actionDebug)
               {
-                Serial.print(F("Case 3: result = "));
-                Serial.println(result);
+                myDebug.print(F("Case 3: result = "));
+                myDebug.println(result);
               }
               actionDelayVal = ((uint32_t) atoi(result));
               
               if(setDebug & actionDebug)
               {
-                Serial.print(F("actionDelayVal = "));
-                Serial.println(actionDelayVal);
+                myDebug.print(F("actionDelayVal = "));
+                myDebug.println(actionDelayVal);
               }
               
               actionDelayVal *= 1000;
               
               if(setDebug & actionDebug)
               {
-                Serial.print(F("actionDelayVal * 1000 = "));
-                Serial.println(actionDelayVal);
-                Serial.print(F("action["));
-                Serial.print(actionArray);
-                Serial.print(F("]."));
+                myDebug.print(F("actionDelayVal * 1000 = "));
+                myDebug.println(actionDelayVal);
+                myDebug.print(F("action["));
+                myDebug.print(actionArray);
+                myDebug.print(F("]."));
               }
               
               if(actionSection == 2)
@@ -3242,8 +3232,8 @@ void udpProcess(void)
                 
                 if(setDebug & actionDebug)
                 {
-                  Serial.print(F("tcDelay = "));
-                  Serial.println((actionDelayVal / 1000));
+                  myDebug.print(F("tcDelay = "));
+                  myDebug.println((actionDelayVal / 1000));
                 }
                 
               }else if (actionSection == 3){
@@ -3255,8 +3245,8 @@ void udpProcess(void)
                 
                 if(setDebug & actionDebug)
                 {
-                  Serial.print(F("thDelay = "));
-                  Serial.println(actionDelayVal / 1000);
+                  myDebug.print(F("thDelay = "));
+                  myDebug.println(actionDelayVal / 1000);
                 }
               }
             }
@@ -3267,8 +3257,8 @@ void udpProcess(void)
           {
             if(setDebug & actionDebug)
             {
-              Serial.print(F("Case 5 addrResult = "));
-              Serial.println(result);
+              myDebug.print(F("Case 5 addrResult = "));
+              myDebug.println(result);
             }
             addrResult = strtok( result, addrDelim );
             while(addrResult != NULL)
@@ -3277,8 +3267,8 @@ void udpProcess(void)
               
               if(setDebug & actionDebug)
               {
-                Serial.print(F(" "));
-                Serial.print(addrVal[addrResultCnt], HEX);
+                myDebug.print(F(" "));
+                myDebug.print(addrVal[addrResultCnt], HEX);
               }
               
               addrResultCnt++;
@@ -3294,9 +3284,9 @@ void udpProcess(void)
             
             if(setDebug & actionDebug)
             {
-              Serial.println();
-              Serial.print(F("chipAddrCnt =  "));
-              Serial.println(chipAddrCnt, HEX);
+              myDebug.println();
+              myDebug.print(F("chipAddrCnt =  "));
+              myDebug.println(chipAddrCnt, HEX);
             }
             
             switch (actionSection)
@@ -3341,16 +3331,16 @@ void udpProcess(void)
             {
               if(setDebug & actionDebug)
               {
-                Serial.print(F("Case 4 LCD = "));
-                Serial.println(result);
+                myDebug.print(F("Case 4 LCD = "));
+                myDebug.println(result);
               }
               action[actionArray].lcdAddr = atoi(result);
               if(setDebug & actionDebug)
               {
-                Serial.print(F("action["));
-                Serial.print(actionArray);
-                Serial.print(F("].lcdAddr = "));
-                Serial.println(action[actionArray].lcdAddr);
+                myDebug.print(F("action["));
+                myDebug.print(actionArray);
+                myDebug.print(F("].lcdAddr = "));
+                myDebug.println(action[actionArray].lcdAddr);
               }
               if( (action[actionArray].lcdAddr >= 32 ) &&
                   (action[actionArray].lcdAddr <= 38 )
@@ -3543,7 +3533,7 @@ void udpProcess(void)
     {
       if(setDebug & pidDebug)
       {
-        Serial.println(F("masterPidStop Enter"));
+        myDebug.println(F("masterPidStop Enter"));
       }
       
       for(x=0;x<maxPIDs;x++)
@@ -3552,18 +3542,18 @@ void udpProcess(void)
         
         if(setDebug & pidDebug)
         {
-          Serial.print(F("ePID["));
-          Serial.print(x);
-          Serial.println(F("].pidEnabled set to FALSE"));
+          myDebug.print(F("ePID["));
+          myDebug.print(x);
+          myDebug.println(F("].pidEnabled set to FALSE"));
         }
         
         ePID[x].myPID->SetMode(MANUAL);
         
         if(setDebug & pidDebug)
         {
-          Serial.print(F("ePID["));
-          Serial.print(x);
-          Serial.println(F("].myPID->SetMode() set to MANUAL"));
+          myDebug.print(F("ePID["));
+          myDebug.print(x);
+          myDebug.println(F("].myPID->SetMode() set to MANUAL"));
         }
         
         if(&ePID[x].switchPtr->chipAddr != NULL)
@@ -3571,16 +3561,16 @@ void udpProcess(void)
           actionSwitchSet((uint8_t *) &ePID[x].switchPtr->chipAddr, ds2406PIOAoff);
           if(setDebug & pidDebug)
           {
-              Serial.print(F("ePID["));
-              Serial.print(x);
-              Serial.println(F("].switchPtr->chipAddr set to OFF"));
+              myDebug.print(F("ePID["));
+              myDebug.print(x);
+              myDebug.println(F("].switchPtr->chipAddr set to OFF"));
           }
         }
       }
       
       if(setDebug & pidDebug)
       {
-        Serial.println(F("masterPidStop Exit"));
+        myDebug.println(F("masterPidStop Exit"));
       }
       
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","masterPIDStop Completed");
@@ -3603,8 +3593,8 @@ void udpProcess(void)
     {
       if(setDebug & pidDebug)
       {
-        Serial.println(F("updatePidArray Enter"));
-        Serial.println(PacketBuffer);
+        myDebug.println(F("updatePidArray Enter"));
+        myDebug.println(PacketBuffer);
       }
       
       result = strtok( PacketBuffer, delim );
@@ -3628,32 +3618,32 @@ void udpProcess(void)
       pidArray = atoi(pidArrayPtr);
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidArray = "));
-        Serial.println(pidArray);
-        Serial.print(F("pidEnabledPtr = "));
-        Serial.println(pidEnabledPtr);
-        Serial.print(F("pidTempAddrPtr = "));
-        Serial.println(pidTempAddrPtr);
-        Serial.print(F("pidSetPointPtr = "));
-        Serial.println(pidSetPointPtr);
-        Serial.print(F("pidSwitchAddrPtr = "));
-        Serial.println(pidSwitchAddrPtr);
-        Serial.print(F("pidKpPtr = "));
-        Serial.println(pidKpPtr);
-        Serial.print(F("pidKiPtr = "));
-        Serial.println(pidKiPtr);
-        Serial.print(F("pidKdPtr = "));
-        Serial.println(pidKdPtr);
-        Serial.print(F("pidDirectionPtr = "));
-        Serial.println(pidDirectionPtr);
-        Serial.print(F("pidWindowSizePtr = "));
-        Serial.println(pidWindowSizePtr);
+        myDebug.print(F("pidArray = "));
+        myDebug.println(pidArray);
+        myDebug.print(F("pidEnabledPtr = "));
+        myDebug.println(pidEnabledPtr);
+        myDebug.print(F("pidTempAddrPtr = "));
+        myDebug.println(pidTempAddrPtr);
+        myDebug.print(F("pidSetPointPtr = "));
+        myDebug.println(pidSetPointPtr);
+        myDebug.print(F("pidSwitchAddrPtr = "));
+        myDebug.println(pidSwitchAddrPtr);
+        myDebug.print(F("pidKpPtr = "));
+        myDebug.println(pidKpPtr);
+        myDebug.print(F("pidKiPtr = "));
+        myDebug.println(pidKiPtr);
+        myDebug.print(F("pidKdPtr = "));
+        myDebug.println(pidKdPtr);
+        myDebug.print(F("pidDirectionPtr = "));
+        myDebug.println(pidDirectionPtr);
+        myDebug.print(F("pidWindowSizePtr = "));
+        myDebug.println(pidWindowSizePtr);
       }
   
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidEnabled = "));
-        Serial.println(ePID[pidArray].pidEnabled);
+        myDebug.print(F("pidEnabled = "));
+        myDebug.println(ePID[pidArray].pidEnabled);
       }
       
       asciiArrayToHexArray(pidTempAddrPtr, addrDelim, addrVal);
@@ -3667,8 +3657,8 @@ void udpProcess(void)
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("chipAddrCnt = "));
-        Serial.println(chipAddrCnt);
+        myDebug.print(F("chipAddrCnt = "));
+        myDebug.println(chipAddrCnt);
       }
       
       if(chipAddrCnt > chipCnt)
@@ -3680,16 +3670,16 @@ void udpProcess(void)
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("tempPtr = "));
-        Serial.println((uint32_t) ePID[pidArray].tempPtr, HEX);
+        myDebug.print(F("tempPtr = "));
+        myDebug.println((uint32_t) ePID[pidArray].tempPtr, HEX);
       }
 
       ePID[pidArray].pidSetPoint = strtod(pidSetPointPtr, NULL);
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidSetPoint = "));
-        Serial.println((double) ePID[pidArray].pidSetPoint);
+        myDebug.print(F("pidSetPoint = "));
+        myDebug.println((double) ePID[pidArray].pidSetPoint);
       }
   
       asciiArrayToHexArray(pidSwitchAddrPtr, addrDelim, addrVal);
@@ -3703,8 +3693,8 @@ void udpProcess(void)
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("chipAddrCnt = "));
-        Serial.println(chipAddrCnt);
+        myDebug.print(F("chipAddrCnt = "));
+        myDebug.println(chipAddrCnt);
       }
       
       if(chipAddrCnt > chipCnt)
@@ -3716,32 +3706,32 @@ void udpProcess(void)
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("switchPtr = "));
-        Serial.println((uint32_t) ePID[pidArray].switchPtr, HEX);
+        myDebug.print(F("switchPtr = "));
+        myDebug.println((uint32_t) ePID[pidArray].switchPtr, HEX);
       }
 
       ePID[pidArray].pidKp = strtod(pidKpPtr, NULL);
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidKp = "));
-        Serial.println((double) ePID[pidArray].pidKp);
+        myDebug.print(F("pidKp = "));
+        myDebug.println((double) ePID[pidArray].pidKp);
       }
 
       ePID[pidArray].pidKi = strtod(pidKiPtr, NULL);
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidKi = "));
-        Serial.println((double) ePID[pidArray].pidKi);
+        myDebug.print(F("pidKi = "));
+        myDebug.println((double) ePID[pidArray].pidKi);
       }
 
       ePID[pidArray].pidKd = strtod(pidKdPtr, NULL);
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidKd = "));
-        Serial.println((double) ePID[pidArray].pidKd);
+        myDebug.print(F("pidKd = "));
+        myDebug.println((double) ePID[pidArray].pidKd);
       }
       
       ePID[pidArray].myPID->SetTunings(ePID[pidArray].pidKp, ePID[pidArray].pidKi, ePID[pidArray].pidKd);
@@ -3756,8 +3746,8 @@ void udpProcess(void)
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidDirection = "));
-        Serial.println(ePID[pidArray].pidDirection);
+        myDebug.print(F("pidDirection = "));
+        myDebug.println(ePID[pidArray].pidDirection);
       }
       
       ePID[pidArray].myPID->SetControllerDirection(ePID[pidArray].pidDirection);
@@ -3785,14 +3775,14 @@ void udpProcess(void)
 
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidEnabled = "));
-        Serial.println(ePID[pidArray].pidEnabled);
+        myDebug.print(F("pidEnabled = "));
+        myDebug.println(ePID[pidArray].pidEnabled);
       }
       
       if(setDebug & pidDebug)
       {
-        Serial.print(F("pidWindowSize = "));
-        Serial.println((double) ePID[pidArray].pidWindowSize);
+        myDebug.print(F("pidWindowSize = "));
+        myDebug.println((double) ePID[pidArray].pidWindowSize);
       }
      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","OK");
      sendUDPpacket();
@@ -3872,8 +3862,8 @@ void udpProcess(void)
       
       if(setDebug & chipNameDebug)
       {
-        Serial.println(F("updateChipName Enter"));
-        Serial.println(PacketBuffer);
+        myDebug.println(F("updateChipName Enter"));
+        myDebug.println(PacketBuffer);
       }
       
       result = strtok( PacketBuffer, delim );
@@ -3900,24 +3890,24 @@ void udpProcess(void)
 
       if(setDebug & chipNameDebug)
       {
-        Serial.print(F("chip["));
-        Serial.print(chipAddrCnt);
-        Serial.print(F("].chipName = "));
-        Serial.println(chip[chipAddrCnt].chipName);
+        myDebug.print(F("chip["));
+        myDebug.print(chipAddrCnt);
+        myDebug.print(F("].chipName = "));
+        myDebug.println(chip[chipAddrCnt].chipName);
         for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
         {
-          Serial.print(F("0x"));
+          myDebug.print(F("0x"));
           if(chip[chipAddrCnt].chipName[cnCnt] < 0x0f)
           {
-            Serial.print(F("0"));
+            myDebug.print(F("0"));
           }
-          Serial.print(chip[chipAddrCnt].chipName[cnCnt], HEX);
+          myDebug.print(chip[chipAddrCnt].chipName[cnCnt], HEX);
           if(cnCnt < chipNameSize - 1)
           {
-            Serial.print(F(", "));
+            myDebug.print(F(", "));
           }
         }
-        Serial.println();
+        myDebug.println();
       }
       
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Name Updated");
@@ -3988,10 +3978,10 @@ void udpProcess(void)
       {
         rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "ERROR");
       }else{
-        Serial.print(F("glcd1w["));
-        Serial.print(x);
-        Serial.print(F("].Name = "));
-        Serial.println(glcd1w[x].Name);
+        myDebug.print(F("glcd1w["));
+        myDebug.print(x);
+        myDebug.print(F("].Name = "));
+        myDebug.println(glcd1w[x].Name);
         if( (glcd1w[x].Name[0] == ' ') || (glcd1w[x].Name[0] == 0x00) )
         {
           rBuffCnt += sprintf(ReplyBuffer + rBuffCnt, "NULL,",x);
@@ -4104,8 +4094,8 @@ void udpProcess(void)
       
       if(setDebug & glcdNameUpdate)
       {
-        Serial.println(F("updateglcd1wName Enter"));
-        Serial.println(PacketBuffer);
+        myDebug.println(F("updateglcd1wName Enter"));
+        myDebug.println(PacketBuffer);
       }
       
       result = strtok( PacketBuffer, delim );
@@ -4114,23 +4104,23 @@ void udpProcess(void)
      
       if(setDebug & glcdNameUpdate)
       {
-        Serial.print(F("glcd1wNameAddr = "));
+        myDebug.print(F("glcd1wNameAddr = "));
         for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
         {
-          Serial.print(F("0x"));
+          myDebug.print(F("0x"));
           if(glcd1wNameAddr[cnCnt] < 0x0f)
           {
-            Serial.print(F("0"));
+            myDebug.print(F("0"));
           }
-          Serial.print(glcd1wNameAddr[cnCnt], HEX);
+          myDebug.print(glcd1wNameAddr[cnCnt], HEX);
           if(cnCnt < chipNameSize - 1)
           {
-            Serial.print(F(","));
+            myDebug.print(F(","));
           }
         }
-        Serial.println();
-        Serial.print(F("glcd1wNameStr = "));
-        Serial.println(glcd1wNameStr);
+        myDebug.println();
+        myDebug.print(F("glcd1wNameStr = "));
+        myDebug.println(glcd1wNameStr);
       }
       
       asciiArrayToHexArray(glcd1wNameAddr, addrDelim, addrVal);
@@ -4138,8 +4128,8 @@ void udpProcess(void)
       
       if(setDebug & glcdNameUpdate)
       {
-        Serial.print(F("glcd1wAddrCnt = "));
-        Serial.println(glcd1wAddrCnt);
+        myDebug.print(F("glcd1wAddrCnt = "));
+        myDebug.println(glcd1wAddrCnt);
       }
       for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)  // clear the name array
       {
@@ -4158,24 +4148,24 @@ void udpProcess(void)
 
       if(setDebug & glcdNameUpdate)
       {
-        Serial.print(F("glcd1w["));
-        Serial.print(glcd1wAddrCnt);
-        Serial.print(F("].Name = "));
-        Serial.println(glcd1w[glcd1wAddrCnt].Name);
+        myDebug.print(F("glcd1w["));
+        myDebug.print(glcd1wAddrCnt);
+        myDebug.print(F("].Name = "));
+        myDebug.println(glcd1w[glcd1wAddrCnt].Name);
         for(cnCnt = 0; cnCnt < chipNameSize; cnCnt++)
         {
-          Serial.print(F("0x"));
+          myDebug.print(F("0x"));
           if(glcd1w[glcd1wAddrCnt].Name[cnCnt] < 0x0f)
           {
-            Serial.print(F("0"));
+            myDebug.print(F("0"));
           }
-          Serial.print(glcd1w[glcd1wAddrCnt].Name[cnCnt], HEX);
+          myDebug.print(glcd1w[glcd1wAddrCnt].Name[cnCnt], HEX);
           if(cnCnt < chipNameSize - 1)
           {
-            Serial.print(F(", "));
+            myDebug.print(F(", "));
           }
         }
-        Serial.println();
+        myDebug.println();
       }
       
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Name Updated");
@@ -4184,12 +4174,35 @@ void udpProcess(void)
     }
     
 
-  case resetGLCD:
+  case resetGLCD: // "b"
     {
       x = atoi((char *) &PacketBuffer[1]);
       resetGLCDdisplay(x);
       rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s%d Reset","GLCD", x);
       sendUDPpacket();
+      break;
+    }
+
+  case setDebugPort: // "c"
+    {
+      x = atoi((char *) &PacketBuffer[1]);
+      if(x == 2)
+      {
+        Stream &myDebug = Serial2;
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "myDebug set to Serial2");
+      }else{
+        Stream &myDebug = Serial;
+        rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s", "myDebug set to Serial");
+      }
+      sendUDPpacket();
+      break;
+    }
+
+  case resetTeensy: // "r"
+    {
+      rBuffCnt += sprintf(ReplyBuffer+rBuffCnt, "%s","Resetting TeensyNet");
+      sendUDPpacket();
+      softReset();
       break;
     }
 
@@ -4224,31 +4237,31 @@ void udpProcess(void)
       
       if(setDebug & lcdDebug)
       {
-        Serial.print(F("lcdMessage is "));
-        Serial.println(lcdMessage);
+        myDebug.print(F("lcdMessage is "));
+        myDebug.println(lcdMessage);
         for( int t = 0; t < msgLength; t++)
         {
-          Serial.print(F("0x"));
+          myDebug.print(F("0x"));
           if(lcdMessage[t] < 0x10)
           {
-            Serial.print(F("0"));
+            myDebug.print(F("0"));
           }
-          Serial.print(lcdMessage[t], HEX);
+          myDebug.print(lcdMessage[t], HEX);
           if(t < (msgLength - 1))
           {
-            Serial.print(F(", "));
+            myDebug.print(F(", "));
           }
         }
-        Serial.println();
+        myDebug.println();
       }
       
       if( msgLength > 21 )
       {
         if(setDebug & lcdDebug)
         {
-          Serial.print(F("lcdMessage is "));
-          Serial.print(msgLength);
-          Serial.println(F(" too long, truncating"));
+          myDebug.print(F("lcdMessage is "));
+          myDebug.print(msgLength);
+          myDebug.println(F(" too long, truncating"));
         }
         lcdMessage[20] = 0x0;
       }
@@ -4291,7 +4304,7 @@ void udpProcess(void)
       MasterStop();
       if(setDebug & resetDebug)
       {
-        Serial.println(F("MasterStop() completed"));
+        myDebug.println(F("MasterStop() completed"));
         delay(1000);
       }
       
@@ -4300,21 +4313,21 @@ void udpProcess(void)
 
       if(setDebug & resetDebug)
       {
-        Serial.println(F("EEPROMclear() completed"));
+        myDebug.println(F("EEPROMclear() completed"));
       }
       I2CEEPROM_readAnything(I2CEEPROMidAddr, i2cEeResult, I2C0x50);
   
       if(setDebug & resetDebug)
       { 
-        Serial.print(F("i2cEeResult = 0x"));
-        Serial.println(i2cEeResult, HEX);
+        myDebug.print(F("i2cEeResult = 0x"));
+        myDebug.println(i2cEeResult, HEX);
       }
   
       if(i2cEeResult != 0x55)
       {
         if(setDebug & resetDebug)
         { 
-          Serial.println(F("No EEPROM Data"));
+          myDebug.println(F("No EEPROM Data"));
           delay(1000);
         }
       }
@@ -4326,7 +4339,7 @@ void udpProcess(void)
       
       if(setDebug & resetDebug)
       { 
-        Serial.println(F("chip structures cleared"));
+        myDebug.println(F("chip structures cleared"));
         delay(1000);
       }
   
@@ -4337,7 +4350,7 @@ void udpProcess(void)
       
       if(setDebug & resetDebug)
       { 
-        Serial.println(F("action structures cleared"));
+        myDebug.println(F("action structures cleared"));
         delay(1000);
       }
   
@@ -4348,7 +4361,7 @@ void udpProcess(void)
       
       if(setDebug & resetDebug)
       { 
-        Serial.println(F("pid structures cleared"));
+        myDebug.println(F("pid structures cleared"));
         delay(1000);
       }
   
@@ -4416,9 +4429,9 @@ void resetGLCDdisplay(uint8_t q)
     glcd1w[q].Page     = 0;
     if(setDebug & glcdSerialDebug)
     {
-      Serial.print(F("Resetting GLCD "));
-      Serial.print(q);
-      Serial.println(F(" TeensyNet"));
+      myDebug.print(F("Resetting GLCD "));
+      myDebug.print(q);
+      myDebug.println(F(" TeensyNet"));
     }
     sendCommand(dsDevice, q, setResetDisplay, 0,0,0,0,0,0,"",0,0,0,0,0,1); //reset the GLCD Display
     delay(2000);
@@ -4433,10 +4446,10 @@ void resetGLCDdisplay(uint8_t q)
       delay(100);
       if(setDebug & glcdSerialDebug)
       {
-        Serial.print(F("Initializing GLCD "));
-        Serial.print(q);
-        Serial.print(F(", Page "));
-        Serial.println(x);
+        myDebug.print(F("Initializing GLCD "));
+        myDebug.print(q);
+        myDebug.print(F(", Page "));
+        myDebug.println(x);
       }
       sprintf(displayStr, "GLCD %d, Page %d Initialized", q, x);
       sendCommand(dsDevice, q, (setPrintStr | setFont | setColorVGA), UBUNTUBOLD,0,WHITE,0,0,0,displayStr,0,0,0,0,0,1); // clear the page
