@@ -37,6 +37,9 @@ $getStructAddr      = "Z";
 
 $updateglcd1wName   = "a";
 $resetGLCD          = "b";
+$setDebugPort       = "c";
+
+$resetTeensy        = 'r';
 
 $displayMessage     = "w";
 $clearAndReset      = "x";
