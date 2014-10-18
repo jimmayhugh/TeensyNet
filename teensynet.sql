@@ -1,11 +1,11 @@
 -- phpMyAdmin SQL Dump
--- version 3.4.11.1deb2
+-- version 3.4.11.1deb2+deb7u1
 -- http://www.phpmyadmin.net
 --
 -- Host: localhost
--- Generation Time: Mar 13, 2014 at 05:25 PM
--- Server version: 5.5.35
--- PHP Version: 5.4.4-14+deb7u8
+-- Generation Time: Oct 18, 2014 at 06:16 AM
+-- Server version: 5.5.38
+-- PHP Version: 5.4.4-14+deb7u14
 
 SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
@@ -21,8 +21,6 @@ SET time_zone = "+00:00";
 --
 CREATE DATABASE `teensynet` DEFAULT CHARACTER SET latin1 COLLATE latin1_swedish_ci;
 USE `teensynet`;
--- GRANT ALL PRIVILEGES ON `teensynet.*` TO `teensynet` IDENTIFIED BY `teensynet`;
--- FLUSH PRIVILEGES;
 
 -- --------------------------------------------------------
 
@@ -77,7 +75,22 @@ CREATE TABLE IF NOT EXISTS `chipNames` (
   `name` varchar(16) NOT NULL,
   `IndexKey` int(11) NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`IndexKey`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=374 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=430 ;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `glcdNames`
+--
+
+CREATE TABLE IF NOT EXISTS `glcdNames` (
+  `id` int(1) NOT NULL,
+  `netID` int(1) NOT NULL,
+  `address` varchar(50) NOT NULL,
+  `name` varchar(16) NOT NULL,
+  `IndexKey` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`IndexKey`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=5 ;
 
 -- --------------------------------------------------------
 
@@ -92,7 +105,7 @@ CREATE TABLE IF NOT EXISTS `netDevices` (
   `port_address` smallint(6) NOT NULL,
   `netActive` tinyint(1) NOT NULL,
   UNIQUE KEY `netID` (`netID`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=99 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=100 ;
 
 -- --------------------------------------------------------
 
