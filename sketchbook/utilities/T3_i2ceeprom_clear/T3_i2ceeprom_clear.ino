@@ -1,0 +1,121 @@
+/*
+ * I2CEEPROM Clear
+ *
+ * Sets all of the bytes of the I2CEEPROM to 0xFF.
+ * Version 0.04 04/09/2015
+ * by Jim Mayhugh
+*/
+ 
+#include <i2c_t3.h>
+#include <I2CEEPROMAnything.h>
+
+uint8_t device = 0x50;
+const uint32_t sizeOfArray = 0xFF80;
+const uint16_t startAddress = 0x0000;
+const uint8_t pageSize = 128;
+uint8_t page[pageSize], sent;
+uint32_t x, y;
+uint8_t serialDebug = 0x01;
+
+// Test Point Stuff
+const uint8_t LED1 = 3;
+const uint8_t LED2 = 4;
+const uint8_t LED3 = 5;
+const uint8_t LED4 = 6;
+const uint8_t LED5 = 7;
+const uint8_t boardVersion = 18; // board versions below 18 use reverse logic for LEDs and test points
+const uint8_t ledON  = 0x00;
+const uint8_t ledOFF = 0xFF;
+// end of Test Point Stuff
+
+void setLED(uint8_t led, uint8_t state)
+{
+  if(boardVersion >= 18)
+  {
+    if(state == ledON)
+    {
+      digitalWrite(led, HIGH);
+    }else{
+      digitalWrite(led, LOW);
+    }
+  }else{
+    if(state == ledON)
+    {
+      digitalWrite(led, LOW);
+    }else{
+      digitalWrite(led, HIGH);
+    }
+  }
+}
+
+void setup()
+{
+
+  for(x = LED1; x <= LED5; x++)
+  {
+    pinMode(x,OUTPUT);       // test LEDs on TeensyNet > V12.0
+    setLED(x, ledOFF);   // turn them all off
+  }
+
+  Wire.begin(I2C_MASTER, NULL, I2C_PINS_18_19, I2C_PULLUP_EXT, I2C_RATE_400);
+  if(serialDebug != 0x00)
+  {
+    Serial.begin(115200);
+    delay(3000);
+    Serial.println(F("Starting"));
+    for(y = 0; y < pageSize; y++) page[y] = 0xff;
+    Serial.println(F("Page initialized"));
+    
+    for(x = 0; x < sizeOfArray; x += pageSize)
+    {
+      setLED(LED2, ledON);   // turn on
+      Serial.print(F("Writing to address 0x"));
+      Serial.print(x, HEX);
+      sent = I2CEEPROM_writeAnything(x, page, device);
+      Serial.print(F(", "));
+      Serial.print(sent);
+      Serial.println(F(" bytes written."));
+      setLED(LED2, ledOFF);   // turn off
+    }
+  
+    for(x = 0; x < sizeOfArray; x += pageSize)
+    {
+      setLED(LED3, ledON);   // turn on
+      for(y = 0; y < pageSize; y++) page[y] = 0x00;
+      Serial.print(F("Reading address 0x"));
+      Serial.print(x, HEX);
+      sent = I2CEEPROM_readAnything(x, page, device);
+      Serial.print(F(", "));
+      Serial.print(sent);
+      Serial.println(F(" bytes read."));
+      Serial.print(F("Address 0x"));
+      Serial.print(x, HEX);
+      Serial.println(F(" = "));
+      for(y = 0; y < pageSize; y++)
+      {
+        Serial.print(page[y], HEX);
+        if( (y > 0) && ((y & 0x0F) == 0x0F))
+        {
+          Serial.println();
+        }else{
+          Serial.print(F(" "));
+        }
+      }
+      Serial.println();
+      setLED(LED3, ledOFF);   // turn off
+     }
+  }else{
+    for(y = 0; y < pageSize; y++) page[y] = 0xff;
+    for(x = 0; x < sizeOfArray; x += pageSize) I2CEEPROM_writeAnything(x, page, device);
+  }
+}
+
+void loop()
+{
+  setLED(LED1, ledON);   // turn on
+  delay(1000);
+  setLED(LED1, ledOFF);   // turn off
+  delay(1000);
+}
+
+

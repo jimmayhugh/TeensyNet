@@ -1,0 +1,5 @@
+<?php
+  $footStr ="
+  </body>
+</html>";
+?>

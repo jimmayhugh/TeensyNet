@@ -1,0 +1,13 @@
+<?php
+$logoStr ="
+<!-- logoStr.php -->
+    <table height=\"250\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"1\">
+      <tr>
+        <td>
+          <!-- <a href=\"http://".$_SERVER['HTTP_HOST']."\"> -->
+            <img src=\"/images/TeensyNet.png\" width=\"100%\" height=\"250\" border=\"0\" alt=\"logo\">
+          </a>
+        </td>
+      </tr>
+    </table>";
+?>
