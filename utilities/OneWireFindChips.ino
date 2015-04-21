@@ -7,7 +7,7 @@
 // The DallasTemperature library can do all this work for you!
 // http://milesburton.com/Dallas_Temperature_Control_Library
 
-OneWire  ds(2);  // on pin 10 (a 4.7K resistor is necessary)
+OneWire  ds(2);  // (a 4.7K resistor is necessary)
 
 const uint8_t ds18S20ID      = 0x10; // Maxim DS18S20 digital Thermometer device
 const uint8_t ds2406ID       = 0x12; // Maxim DS2406+ digital switch
@@ -19,7 +19,7 @@ const uint8_t max31855ID     = 0xAA; // Teensy 3.0 1-wire slave with MAX31855 K-
 
 void setup(void) 
 {
-  Serial.begin(11500);
+  Serial.begin(115200);
   delay(5000);
 }
 
