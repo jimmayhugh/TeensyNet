@@ -38,7 +38,6 @@ void findChips(void)
 {
  int cntx = 0, cmpCnt, cmpArrayCnt, dupArray = 0, cnty;
 
-//  digitalWrite(LED1, LOW); //start DSO sync
   setLED(LED1, ledON); // start DSO sync
   numberOfGLCDs = 0;
   numberOf1wLCDs = 0;
@@ -101,7 +100,6 @@ void findChips(void)
     
     if(ds.crc8(chip[cntx].chipAddr, chipAddrSize-1) != chip[cntx].chipAddr[chipAddrSize-1])
     {
-      continue;
       if(setDebug & findChipDebug)
       {
         myDebug[debugPort]->print(F("CRC Error - Chip "));
@@ -111,6 +109,7 @@ void findChips(void)
         myDebug[debugPort]->print(F(", CRC should be "));
         myDebug[debugPort]->println(ds.crc8(chip[cntx].chipAddr, chipAddrSize-1));
       }
+      continue;
     }
 
     if(setDebug & findChipDebug)
@@ -142,7 +141,6 @@ void findChips(void)
   ds.reset_search();
   delay(250);
   chipCnt = cntx;
-//  numGLCDs = numberOfGLCDs;
   glcdCnt = numberOfGLCDs;
   num1wLCDs = numberOf1wLCDs;
   
@@ -192,7 +190,7 @@ void findChips(void)
     
     myDebug[debugPort]->print(glcdCnt);
     myDebug[debugPort]->print(F(" 1-wire GLCD"));
-    if(chipCnt == 1)
+    if(glcdCnt == 1)
     {
       myDebug[debugPort]->println(F(" Detected"));
     }else{
@@ -201,14 +199,49 @@ void findChips(void)
     
     myDebug[debugPort]->print(lcdCnt);
     myDebug[debugPort]->print(F(" 1-wire LCD"));
-    if(chipCnt == 1)
+    if(lcdCnt == 1)
     {
       myDebug[debugPort]->println(F(" Detected"));
     }else{
       myDebug[debugPort]->println(F("s Detected"));
     }
-  }  
-//  digitalWrite(LED1, HIGH); // end DSO sync
+  }
+  for(cntx = 0; cntx < maxChips; cntx++)
+  {
+    switch(chip[cntx].chipAddr[0])
+    {
+      case ds18b20ID:
+      {
+        if(setDebug & findChipDebug)
+        {
+          myDebug[debugPort]->print("Writing to chip[");
+          myDebug[debugPort]->print(cntx);
+          myDebug[debugPort]->println("] scratchpad");
+        }
+        ds.reset();
+        ds.select(chip[cntx].chipAddr);
+        ds.write(0x4E); // write to scratchpad;
+        ds.write(0x00); // low alarm
+        ds.write(0x00); // high alarm
+        ds.write(0x1F); // configuration register - 9 bit accuracy (0.5deg C)
+        delay(5);
+        ds.reset();
+        ds.select(chip[cntx].chipAddr);
+        ds.write(0x48); // copy scratchpad to EEPROM;
+        delay(5);
+        if(setDebug & findChipDebug)
+        {
+          myDebug[debugPort]->println("Finished writing to scratchpad");
+        }
+        break;
+      }
+      
+      default:
+      {
+        break;
+      }
+    }
+  }
     setLED(LED1, ledOFF); // end DSO sync
 }
 
@@ -373,14 +406,13 @@ void updateChipStatus(int x)
 
   if( setDebug & chipStatusLED)
     setLED(LED2, ledON); //start updateStatusSync
-//    digitalWrite(LED2, LOW); //start updateStatus sync
 
   switch(chip[x].chipAddr[0])
   {
     
     case ds2762ID:
     {
-      if(millis() >= chip[x].tempTimer + ds2762UpdateTime)
+      if(chip[x].tempTimer >= ds2762UpdateTime)
       {
         if(setDebug & ds2762Debug)
         {
@@ -447,7 +479,7 @@ void updateChipStatus(int x)
           myDebug[debugPort]->println();
           myDebug[debugPort]->println();
         }
-        chip[x].tempTimer = millis() + tempReadDelay;
+        chip[x].tempTimer = 0;
       }
       break;
     }
@@ -456,22 +488,15 @@ void updateChipStatus(int x)
     case t3tcID:
     case max31850ID:
     {
-      if(chip[x].tempTimer == 0)
+      if((chip[x].tempTimer >= tempReadDelay))
       {
-        ds.reset();
-        ds.select(chip[x].chipAddr);
-        ds.write(0x4E); // write to scratchpad;
-        ds.write(0x00); // low alarm
-        ds.write(0x00); // high alarm
-        ds.write(0x1F); // configuration register - 9 bit accuracy (0.5deg C)
-        ds.reset();
-        ds.select(chip[x].chipAddr);
-        ds.write(0x44);         // start conversion
-        chip[x].tempTimer = millis();
-      }
-
-      if((chip[x].tempTimer != 0) && (millis() >= chip[x].tempTimer + tempReadDelay))
-      {
+        if(setDebug & chipDebug)
+        {
+          myDebug[debugPort]->print("chip[");
+          myDebug[debugPort]->print(x);
+          myDebug[debugPort]->print("].tempTimer = ");
+          myDebug[debugPort]->println(chip[x].tempTimer);
+        }
         ds.reset();
         ds.select(chip[x].chipAddr);    
         ds.write(0xBE);         // Read Scratchpad
@@ -479,8 +504,16 @@ void updateChipStatus(int x)
         for (int i = 0; i < 9; i++) 
         {
           chipBuffer[i] = ds.read();
+          if(setDebug & chipDebug)
+          {
+            myDebug[debugPort]->print(chipBuffer[i], HEX);
+            myDebug[debugPort]->print(" ");
+          }
         }
-        
+        if(setDebug & chipDebug)
+        {
+          myDebug[debugPort]->println();
+        }
         if(ds.crc8(chipBuffer, 8) != chipBuffer[8])
         {
           if(setDebug & crcDebug)
@@ -492,7 +525,6 @@ void updateChipStatus(int x)
           chip[x].tempTimer = 0; // restart the chip times
           break; // CRC invalid, try later
         }
-      // convert the data to actual temperature
         int16_t raw = (chipBuffer[1] << 8) | chipBuffer[0];
         if( showCelsius == TRUE)
         {
@@ -510,6 +542,9 @@ void updateChipStatus(int x)
             chip[x].chipStatus =  (((raw >> 4) * 9) / 5) + 32;
           }
         }
+        ds.reset();
+        ds.select(chip[x].chipAddr);
+        ds.write(0x44);         // start conversion
         chip[x].tempTimer = 0;
       }
       break;
@@ -536,7 +571,7 @@ void updateChipStatus(int x)
         chipCRCval = ~(ds.crc16(chipBuffer, 11)) & 0xFFFF;
         chipBufferCRC = ((chipBuffer[12] << 8) | chipBuffer[11]) ;
 
-        if(setDebug & chipDebug)
+        if(setDebug & crcDebug)
         {
           myDebug[debugPort]->print(F("chip "));
           myDebug[debugPort]->print(x);
@@ -567,7 +602,6 @@ void updateChipStatus(int x)
   if( setDebug & chipStatusLED)
   {
     setLED(LED2, ledOFF); //stop updateStatusSync  
-//    digitalWrite(LED2, HIGH); //stop updateStatus sync
   }else{
     delayMicroseconds(100);
   }

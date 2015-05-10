@@ -15,10 +15,10 @@ const char* versionStrName   = "TeensyNet 3.1";
 const char* teensyType = "UNKNOWN ";
 #endif
 
-const char* versionStrNumber = "V-0.0.55";
-const char* versionStrDate   = "04/10/2015";
+const char* versionStrNumber = "V-0.0.56";
+const char* versionStrDate   = "05/10/2015";
 
-const uint8_t boardVersion = 18; // board versions below 18 use reverse logic for LEDs and test points
+const uint8_t boardVersion = 14; // board versions below 18 use reverse logic for LEDs and test points
 const uint8_t ledON  = 0x00;
 const uint8_t ledOFF = 0xFF;
 

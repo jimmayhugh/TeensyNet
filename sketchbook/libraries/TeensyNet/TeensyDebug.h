@@ -34,6 +34,7 @@ const uint32_t lcdNameUpdate   = (lcdSerialDebug  << 1); // 0x02000000; //  3355
 const uint32_t debugLCD        = (lcdNameUpdate   << 1); // 0x04000000; //  67108864 LCD debug on
 const uint32_t lcd1wLED        = (debugLCD        << 1); // 0x08000000; // 134217728 lcd1W LED
 
+const long baudRate = 115200;
 Stream *myDebug[] = { &Serial, &Serial2 };
 uint8_t debugPort = 0;
 

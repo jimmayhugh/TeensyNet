@@ -73,10 +73,11 @@ char *nullStr = (char *)"";
 
 typedef struct
 {
-  uint8_t    chipAddr[chipAddrSize];
-  int16_t    chipStatus;
-  uint32_t   tempTimer;
-  char       chipName[chipNameSize+1];
+  uint8_t         chipAddr[chipAddrSize];
+  int16_t         chipStatus;
+//  uint32_t   tempTimer;
+  elapsedMillis   tempTimer;
+  char            chipName[chipNameSize+1];
 }chipStruct;
 
 const chipStruct chipClear = { {0,0,0,0,0,0,0,0}, 0, 0, "" };

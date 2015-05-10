@@ -2,8 +2,8 @@
 
 TeensyNet.ino
 
-Version 0.0.55
-Last Modified 04/10/2015
+Version 0.0.56
+Last Modified 05/10/2015
 By Jim Mayhugh
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -67,7 +67,6 @@ with:
 #include <stdlib.h>
 #include <stdint.h>
 #include <t3mac.h>
-//#include <FastWire.h>
 #include <i2c_t3.h>
 #include <Teensy_MCP23017.h>
 #include <Teensy_RGBLCDShield.h>
@@ -181,8 +180,8 @@ void setup()
   
   I2CEEPROM_readAnything(I2CEEPROMipAddr, i2cIPResult, I2C0x50);
   
-//  if(setDebug & eepromDebug)
-//  { 
+  if(setDebug & eepromDebug)
+  { 
     myDebug[debugPort]->print(F("i2cipResult = "));
     myDebug[debugPort]->print(i2cIPResult[0]);
     myDebug[debugPort]->print(F("."));
@@ -191,7 +190,7 @@ void setup()
     myDebug[debugPort]->print(i2cIPResult[2]);
     myDebug[debugPort]->print(F("."));
     myDebug[debugPort]->println(i2cIPResult[3]);
-//  }
+  }
 #endif // STATIC_IP
 
   I2CEEPROM_readAnything(I2CEEPROMbjAddr, bonjourNameBuf, I2C0x50);
@@ -353,9 +352,7 @@ void setup()
   }
 #endif
 // start Bonjour service
-//  if(EthernetBonjour.begin("TeensyNetTURD"))
   setLED(LED5, ledON);
-//  digitalWrite(LED5, LOW);
   if(EthernetBonjour.begin(bonjourNameBuf))
   {
     myDebug[debugPort]->println(F("Bonjour Service started"));
@@ -367,9 +364,8 @@ void setup()
   }
   EthernetBonjour.run();
   setLED(LED5, ledOFF);
-//  digitalWrite(LED5, HIGH);
 
-// send startup data to I2C LCDs if available  
+// send startup data to I2C LCDs if available
   for(x = 0; x < numLCDs; x++)
   {
     lcd[x]->clear();
@@ -386,7 +382,7 @@ void setup()
     lcd[x]->print(F("   "));
   }
 
-// send startup data to I2C LCDs if available  
+// send startup data to 1-Wire LCDs if available  
   for(x = 0; x < maxLCDs; x++)
   {
     if(lcd1w[x].Addr[0] == dsLCD)
@@ -488,15 +484,7 @@ void loop()
   {
     timer = millis();
   }
-  
-  for(int i = 0; i < maxChips; i++)
-  {
-    if(chip[i].tempTimer > (millis() + 5000)) // in case of rollover
-    {
-      chip[i].tempTimer = millis();
-    }
-  }
-  
+
   updateChipStatus(chipX);
   chipX++;
   if(chipX >= maxChips)

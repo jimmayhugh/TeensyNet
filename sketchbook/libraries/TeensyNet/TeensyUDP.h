@@ -79,9 +79,6 @@ const uint8_t tooColdSwitch    = 'C';
 const uint8_t noChipPresent    = 0xFF;
 
 
-const long baudRate = 115200;
-
-
 // An EthernetUDP instance to let us send and receive packets over UDP
 EthernetUDP Udp;
 #endif
