@@ -39,7 +39,7 @@ Stream *myDebug[] = { &Serial, &Serial2 };
 uint8_t debugPort = 0;
 
 //uint32_t setDebug = 0x00000000;
-uint32_t setDebug = (chipStatusLED | udpProcessLED | glcd1WLED | lcd1wLED | chipDebug); // default - runs status LEDs
+uint32_t setDebug = (chipStatusLED | udpProcessLED | glcd1WLED | lcd1wLED ); // default - runs status LEDs
 //uint32_t setDebug = (eepromDebug | findChipDebug);
 //uint32_t setDebug = (glcdSerialDebug | glcdDebug | lcdSerialDebug | lcdDebug | debugLCD);
 //uint32_t setDebug = glcdSerialDebug;
